@@ -37,7 +37,7 @@ export default function ServicesPage() {
         const registrationsWithServices = await Promise.all(
           userRegistrations.map(async (registration) => {
             try {
-              const service = await getService(registration.serviceId);
+              const service = await getService(registration.serviceId, registration.templeId);
               return { ...registration, service };
             } catch (error) {
               console.error(`Error loading service ${registration.serviceId}:`, error);
