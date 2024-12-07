@@ -1,0 +1,201 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getAdminDoc() {
+      return get(/databases/$(database)/documents/admin/$(request.auth.uid)).data;
+    }
+    
+    function isSuperAdmin() {
+      let adminDoc = getAdminDoc();
+      return adminDoc != null && adminDoc.isSuperAdmin == true;
+    }
+    
+    function isAdmin() {
+      let adminDoc = getAdminDoc();
+      return adminDoc != null && (
+        adminDoc.isSuperAdmin == true || 
+        (adminDoc.isAdmin == true && adminDoc.templeId != null)
+      );
+    }
+
+    function isTempleAdmin(templeId) {
+      let adminDoc = getAdminDoc();
+      return adminDoc != null && templeId != null && 
+        (adminDoc.isSuperAdmin == true || 
+        (adminDoc.isAdmin == true && adminDoc.templeId == templeId));
+    }
+
+    // Root admin collection
+    match /admin/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        request.auth.uid == adminId || 
+        isSuperAdmin()
+      );
+    }
+
+    // Temple admins subcollection
+    match /temples/{templeId}/temple_admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        request.auth.uid == adminId || 
+        isSuperAdmin()
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && 
+        request.resource.data.keys().hasOnly(['email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']);
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'photoURL', 'updatedAt'])) || 
+        (isAdmin() && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt'])) ||
+        isSuperAdmin()
+      );
+      allow delete: if isOwner(userId) || isSuperAdmin();
+    }
+
+    match /service_registrations/{registrationId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || 
+        isTempleAdmin(resource.data.templeId)
+      );
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || 
+        isTempleAdmin(resource.data.templeId)
+      );
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || 
+        isTempleAdmin(resource.data.templeId) ||
+        isTempleAdmin(get(/databases/$(database)/documents/service_registrations/$(registrationId)).data.templeId)
+      );
+    }
+
+    match /service_types/{typeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+        request.resource.data.keys().hasOnly([
+          'id', 'name', 'icon', 'templeId',
+          'createdAt', 'updatedAt'
+        ]) && (
+          isAdmin() || 
+          (request.resource.data.templeId != null && isTempleAdmin(request.resource.data.templeId))
+        );
+      allow update, delete: if isAuthenticated() && 
+        resource.data.templeId != null && 
+        isTempleAdmin(resource.data.templeId);
+    }
+
+    match /temples/{templeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isSuperAdmin() && 
+        request.resource.data.keys().hasOnly([
+          'name', 'description', 'aboutImageUrl', 'address',
+          'phone', 'email', 'website', 'createdAt', 'updatedAt'
+        ]);
+      allow update: if isAuthenticated() && (
+        (isTempleAdmin(templeId) && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['description', 'aboutImageUrl', 'phone', 'email', 'website', 'updatedAt'])) ||
+        (isSuperAdmin() && request.resource.data.keys().hasOnly([
+          'name', 'description', 'aboutImageUrl', 'address',
+          'phone', 'email', 'website', 'createdAt', 'updatedAt'
+        ]))
+      );
+      allow delete: if isAuthenticated() && isSuperAdmin();
+
+      match /events/{eventId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+          isTempleAdmin(templeId) && 
+          request.resource.data.keys().hasOnly([
+            'id', 'title', 'description', 'location',
+            'startDate', 'endDate', 'capacity',
+            'registrationRequired', 'imageUrl',
+            'templeId', 'createdAt', 'updatedAt'
+          ]);
+        allow update: if isAuthenticated() && 
+          isTempleAdmin(templeId);
+        allow delete: if isAuthenticated() && 
+          isTempleAdmin(templeId);
+      }
+
+      match /services/{serviceId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && (
+          isTempleAdmin(templeId) ||
+          request.auth.uid == request.resource.data.createdBy
+        ) && request.resource.data.keys().hasOnly([
+          'id', 'name', 'description', 'type',
+          'date', 'timeSlot', 'maxParticipants',
+          'currentParticipants', 'pendingParticipants',
+          'createdBy', 'templeId',
+          'createdAt', 'updatedAt'
+        ]) && request.resource.data.timeSlot.keys().hasOnly([
+          'start', 'end'
+        ]);
+        allow update: if isAuthenticated() && (
+          isTempleAdmin(templeId) ||
+          resource.data.createdBy == request.auth.uid ||
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['currentParticipants', 'pendingParticipants', 'updatedAt'])
+        );
+        allow delete: if isAuthenticated() && (
+          isTempleAdmin(templeId) ||
+          resource.data.createdBy == request.auth.uid
+        );
+      }
+
+      match /settings/{settingId} {
+        allow read: if isAuthenticated() && isTempleAdmin(templeId);
+        allow write: if isAuthenticated() && 
+          isTempleAdmin(templeId) && 
+          request.resource.data.keys().hasOnly([
+            'key', 'value', 'type', 'createdAt', 'updatedAt'
+          ]);
+      }
+
+      match /temple_admins/{adminId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && 
+          isSuperAdmin() && 
+          request.resource.data.keys().hasOnly([
+            'userId', 'role', 'createdAt', 'updatedAt'
+          ]);
+      }
+
+      match /temple_members/{memberId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+          request.resource.data.keys().hasOnly([
+            'userId', 'membershipType', 'joinDate',
+            'status', 'createdAt', 'updatedAt'
+          ]) && (
+            isTempleAdmin(templeId) ||
+            request.resource.data.userId == request.auth.uid
+          );
+        allow update: if isAuthenticated() && 
+          isTempleAdmin(templeId) && 
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'membershipType', 'updatedAt']);
+        allow delete: if isAuthenticated() && isTempleAdmin(templeId);
+      }
+    }
+
+    // Add collection group rule for services
+    match /{path=**}/services/{serviceId} {
+      allow read: if isAuthenticated() && isAdmin();
+    }
+  }
+}

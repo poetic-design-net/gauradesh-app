@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isSuperAdmin() {
+      return firestore.get(/databases/(default)/documents/admin/$(request.auth.uid)).data.isSuperAdmin == true;
+    }
+    
+    function isTempleAdmin(templeId) {
+      let adminDoc = firestore.get(/databases/(default)/documents/admin/$(request.auth.uid)).data;
+      return adminDoc.isAdmin == true && adminDoc.templeId == templeId;
+    }
+
+    // User profile images
+    match /users/{userId}/profile-image {
+      // Anyone can read profile images
+      allow read: if isAuthenticated();
+      // Users can only upload their own profile image
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Temple images
+    match /temples/{templeId}/about-image {
+      // Anyone can read temple images
+      allow read: if isAuthenticated();
+      // Only temple admins and super admins can upload images
+      allow write: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isTempleAdmin(templeId)
+      );
+    }
+  }
+}

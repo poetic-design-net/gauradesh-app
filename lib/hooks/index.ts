@@ -1,0 +1,1 @@
+export { useTempleAdmin } from './useTempleAdmin';
