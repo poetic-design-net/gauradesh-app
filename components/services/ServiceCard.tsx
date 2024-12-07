@@ -8,6 +8,8 @@ import { ArrowRight, Calendar, Clock, Edit, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface ServiceCardProps {
   service: Service;
@@ -16,13 +18,41 @@ interface ServiceCardProps {
   onDelete?: (service: Service) => void;
 }
 
+interface ServiceCounts {
+  currentParticipants: number;
+  pendingParticipants: number;
+  maxParticipants: number;
+}
+
 export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCardProps) {
   const { user } = useAuth();
-  const currentParticipants = service.currentParticipants || 0;
-  const pendingParticipants = service.pendingParticipants || 0;
-  const maxParticipants = service.maxParticipants || 0;
-  const percentageFull = Math.round((currentParticipants / maxParticipants) * 100);
-  const isFull = currentParticipants >= maxParticipants;
+  const [counts, setCounts] = useState<ServiceCounts>({
+    currentParticipants: service.currentParticipants || 0,
+    pendingParticipants: service.pendingParticipants || 0,
+    maxParticipants: service.maxParticipants || 0
+  });
+
+  useEffect(() => {
+    // Subscribe to real-time updates using Firestore
+    const serviceRef = doc(db, `temples/${service.templeId}/services/${service.id}`);
+    const unsubscribe = onSnapshot(serviceRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setCounts({
+          currentParticipants: data.currentParticipants || 0,
+          pendingParticipants: data.pendingParticipants || 0,
+          maxParticipants: data.maxParticipants || 0
+        });
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [service.id, service.templeId]);
+
+  const percentageFull = Math.round((counts.currentParticipants / counts.maxParticipants) * 100);
+  const isFull = counts.currentParticipants >= counts.maxParticipants;
+  const isAvailable = counts.currentParticipants < counts.maxParticipants;
 
   // Only show edit/delete if the handlers are provided
   const showManageButtons = Boolean(onEdit || onDelete);
@@ -54,7 +84,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
                   <Edit className="h-4 w-4 text-purple-400" />
                 </Button>
               )}
-            
+             
             </div>
           )}
         </div>
@@ -84,12 +114,12 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-300">
-              {currentParticipants} of {maxParticipants} spots filled
-              {pendingParticipants > 0 && ` (${pendingParticipants} pending)`}
+              {counts.currentParticipants} of {counts.maxParticipants} spots filled
+              {counts.pendingParticipants > 0 && ` (${counts.pendingParticipants} pending)`}
             </span>
             <span className={`font-medium ${
               isFull ? 'text-red-400' : 
-              pendingParticipants > 0 ? 'text-yellow-400' :
+              counts.pendingParticipants > 0 ? 'text-yellow-400' :
               percentageFull > 75 ? 'text-orange-400' : 
               'text-green-400'
             }`}>
@@ -111,12 +141,12 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
               style={{ width: `${percentageFull}%` }}
             />
             {/* Pending Participants Bar */}
-            {pendingParticipants > 0 && (
+            {counts.pendingParticipants > 0 && (
               <div 
                 className="absolute top-0 h-full bg-gradient-to-r from-yellow-400 to-yellow-500 opacity-50"
                 style={{ 
                   left: `${percentageFull}%`,
-                  width: `${Math.round((pendingParticipants / maxParticipants) * 100)}%`
+                  width: `${Math.round((counts.pendingParticipants / counts.maxParticipants) * 100)}%`
                 }}
               />
             )}
@@ -139,11 +169,11 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
               : 'bg-purple-500/80 text-purple-300 hover:bg-purple-500/90'
           }`}
           onClick={() => onRegister(service.id)}
-          disabled={isFull}
+          disabled={isFull || !isAvailable}
         >
           <span className="flex items-center justify-center gap-2">
             {isFull ? 'Service Full' : 'Register for Service'}
-            {!isFull && (
+            {!isFull && isAvailable && (
               <ArrowRight className="h-4 w-4 transform transition-transform group-hover:translate-x-1" />
             )}
           </span>

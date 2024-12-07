@@ -32,5 +32,16 @@ service firebase.storage {
         isTempleAdmin(templeId)
       );
     }
+
+    // Temple logos
+    match /temples/{templeId}/logo {
+      // Anyone can read temple logos
+      allow read: if isAuthenticated();
+      // Only temple admins and super admins can upload logos
+      allow write: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isTempleAdmin(templeId)
+      );
+    }
   }
 }

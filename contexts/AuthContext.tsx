@@ -8,10 +8,10 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  deleteUser,
 } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import { createUserProfile } from '../lib/db/users';
-import { getDoc, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
@@ -32,58 +32,100 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    // First, wait for Firebase Auth to initialize
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user?.uid ?? 'No user');
       setUser(user);
       setLoading(false);
-
-      if (user) {
-        try {
-          // Test database connection by trying to read user's document
-          await getDoc(doc(db, 'users', user.uid));
-          setInitialized(true);
-        } catch (error) {
-          console.error('Error initializing Firebase:', error);
-          // If there's an error, we'll try again on the next auth state change
-          setInitialized(false);
-        }
-      } else {
-        // If no user, we can still mark as initialized since auth is ready
-        setInitialized(true);
-      }
+      setInitialized(true);
     });
 
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
       await signInWithEmailAndPassword(auth, email, password);
+      
+      // Wait a bit for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      router.push('/dashboard');
     } finally {
       setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, displayName: string, templeId: string) => {
+    let createdUser: User | null = null;
     try {
       setLoading(true);
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Update the user's display name in Firebase Auth
-      await updateProfile(userCredential.user, {
-        displayName: displayName
-      });
+      // Create Firebase Auth user
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      createdUser = user;
       
-      // Create initial user profile in Firestore with all details
-      await createUserProfile(userCredential.user.uid, {
-        email: email,
-        displayName: displayName,
-        photoURL: userCredential.user.photoURL || null,
-        templeId: templeId,
-      });
+      // Update display name
+      await updateProfile(user, { displayName });
+      
+      // Wait for a short time to ensure auth state is updated
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create user profile with retry logic
+      let retries = 3;
+      let lastError: any = null;
+      
+      while (retries > 0) {
+        try {
+          await createUserProfile(user.uid, {
+            uid: user.uid,
+            email,
+            displayName,
+            templeId,
+            photoURL: null,
+            bio: null,
+            isAdmin: false,
+            isSuperAdmin: false,
+          });
+          console.log('Profile created successfully');
+          
+          // Wait a bit for Firestore to update
+          await new Promise(resolve => setTimeout(resolve, 500));
+          router.push('/dashboard');
+          
+          return; // Success, exit the function
+        } catch (error) {
+          console.error(`Failed to create profile, retries left: ${retries}`, error);
+          lastError = error;
+          retries--;
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retrying
+          }
+        }
+      }
+      
+      // If we get here, all retries failed
+      if (lastError) {
+        // Clean up the auth user since profile creation failed
+        if (createdUser) {
+          try {
+            await deleteUser(createdUser);
+          } catch (deleteError) {
+            console.error('Error cleaning up auth user:', deleteError);
+          }
+        }
+        throw lastError;
+      }
+      
+    } catch (error) {
+      // If any error occurred and we created a user, clean it up
+      if (createdUser) {
+        try {
+          await deleteUser(createdUser);
+        } catch (deleteError) {
+          console.error('Error cleaning up auth user:', deleteError);
+        }
+      }
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -99,7 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Only render children when both auth is loaded and Firebase is initialized
   if (loading || !initialized) {
     return (
       <div className="flex items-center justify-center min-h-screen">

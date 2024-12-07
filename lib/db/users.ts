@@ -24,104 +24,143 @@ export interface UserProfile {
   bio?: string | null;
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
-  templeId?: string | null; // Using consistent casing
+  templeId?: string | null;
   createdAt?: Timestamp | FieldValue;
   updatedAt?: Timestamp | FieldValue;
 }
 
 export async function createUserProfile(uid: string, data: Partial<UserProfile>) {
-  const userRef = doc(db, USERS_COLLECTION, uid);
-  const userSnap = await getDoc(userRef);
+  try {
+    console.log('Creating user profile:', { uid, data });
+    const userRef = doc(db, USERS_COLLECTION, uid);
+    const userSnap = await getDoc(userRef);
 
-  // If document doesn't exist, create it
-  if (!userSnap.exists()) {
-    const userData = {
-      uid,
-      email: data.email || '',
-      displayName: data.displayName || '',
-      photoURL: data.photoURL || null,
-      bio: data.bio || null,
-      isAdmin: false,
-      isSuperAdmin: false,
-      templeId: data.templeId || null, // Using consistent casing
-      createdAt: serverTimestamp(),
+    // If document doesn't exist, create it with all required fields
+    if (!userSnap.exists()) {
+      const userData = {
+        uid, // Include the uid in the document
+        email: data.email || '',
+        displayName: data.displayName || '',
+        photoURL: null,
+        bio: null,
+        isAdmin: false,
+        isSuperAdmin: false,
+        templeId: data.templeId || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      console.log('Creating new user document:', userData);
+      await setDoc(userRef, userData);
+      console.log('User document created successfully');
+      return userData;
+    }
+
+    // If document exists, update it with only allowed fields
+    const updateData = {
+      displayName: data.displayName,
+      photoURL: data.photoURL,
       updatedAt: serverTimestamp(),
     };
 
-    await setDoc(userRef, userData);
-    return userData;
+    console.log('Updating existing user document:', updateData);
+    await updateDoc(userRef, updateData);
+    console.log('User document updated successfully');
+    return { ...updateData, uid };
+  } catch (error) {
+    console.error('Error in createUserProfile:', error);
+    throw error;
   }
-
-  // If document exists, update it
-  const updateData = {
-    ...data,
-    updatedAt: serverTimestamp(),
-  };
-
-  await updateDoc(userRef, updateData);
-  return updateData;
 }
 
 export async function getUserProfile(uid: string) {
-  const userRef = doc(db, USERS_COLLECTION, uid);
-  const userSnap = await getDoc(userRef);
-  
-  if (userSnap.exists()) {
-    return userSnap.data() as UserProfile;
+  try {
+    console.log('Getting user profile:', uid);
+    const userRef = doc(db, USERS_COLLECTION, uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      console.log('User profile found');
+      return userSnap.data() as UserProfile;
+    }
+
+    // Return a default profile without creating it
+    console.log('User profile not found, returning default profile');
+    return {
+      uid,
+      email: '',
+      displayName: '',
+      photoURL: null,
+      bio: null,
+      isAdmin: false,
+      isSuperAdmin: false,
+      templeId: null,
+    } as UserProfile;
+  } catch (error) {
+    console.error('Error in getUserProfile:', error);
+    throw error;
   }
-
-  // If profile doesn't exist, create it with basic data
-  const basicProfile = {
-    uid,
-    email: '',
-    displayName: '',
-    photoURL: null,
-    bio: null,
-    isAdmin: false,
-    isSuperAdmin: false,
-    templeId: null, // Using consistent casing
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-
-  await setDoc(userRef, basicProfile);
-  return basicProfile;
 }
 
 export async function updateUserProfile(uid: string, data: Partial<UserProfile>) {
-  const userRef = doc(db, USERS_COLLECTION, uid);
-  const userSnap = await getDoc(userRef);
+  try {
+    console.log('Updating user profile:', { uid, data });
+    const userRef = doc(db, USERS_COLLECTION, uid);
+    const userSnap = await getDoc(userRef);
 
-  if (!userSnap.exists()) {
-    // Create profile if it doesn't exist
-    return createUserProfile(uid, data);
+    if (!userSnap.exists()) {
+      console.log('Profile does not exist, creating new one');
+      // Create profile if it doesn't exist
+      return createUserProfile(uid, data);
+    }
+
+    // Only include fields that are allowed to be updated
+    const updateData = {
+      displayName: data.displayName,
+      photoURL: data.photoURL,
+      updatedAt: serverTimestamp(),
+    };
+
+    console.log('Updating existing profile');
+    await updateDoc(userRef, updateData);
+    console.log('Profile updated successfully');
+    return { ...updateData, uid };
+  } catch (error) {
+    console.error('Error in updateUserProfile:', error);
+    throw error;
   }
-
-  const updateData = {
-    ...data,
-    updatedAt: serverTimestamp(),
-  };
-
-  await updateDoc(userRef, updateData);
-  return updateData;
 }
 
 export async function searchUsers(searchTerm: string) {
-  const usersRef = collection(db, USERS_COLLECTION);
-  const q = query(
-    usersRef,
-    where('displayName', '>=', searchTerm),
-    where('displayName', '<=', searchTerm + '\uf8ff')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => doc.data() as UserProfile);
+  try {
+    console.log('Searching users with term:', searchTerm);
+    const usersRef = collection(db, USERS_COLLECTION);
+    const q = query(
+      usersRef,
+      where('displayName', '>=', searchTerm),
+      where('displayName', '<=', searchTerm + '\uf8ff')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    console.log('Search results count:', querySnapshot.size);
+    return querySnapshot.docs.map(doc => doc.data() as UserProfile);
+  } catch (error) {
+    console.error('Error in searchUsers:', error);
+    throw error;
+  }
 }
 
 export async function getUsersByTemple(templeId: string) {
-  const usersRef = collection(db, USERS_COLLECTION);
-  const q = query(usersRef, where('templeId', '==', templeId));
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => doc.data() as UserProfile);
+  try {
+    console.log('Getting users for temple:', templeId);
+    const usersRef = collection(db, USERS_COLLECTION);
+    const q = query(usersRef, where('templeId', '==', templeId));
+    
+    const querySnapshot = await getDocs(q);
+    console.log('Users found:', querySnapshot.size);
+    return querySnapshot.docs.map(doc => doc.data() as UserProfile);
+  } catch (error) {
+    console.error('Error in getUsersByTemple:', error);
+    throw error;
+  }
 }

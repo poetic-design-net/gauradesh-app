@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { Temple, updateTemple, TempleUpdateData } from '@/lib/db/temples';
+import { Temple, updateTemple, TempleUpdateData, TempleProgram } from '@/lib/db/temples';
+import { TempleProgramForm } from './TempleProgramForm';
 import Image from 'next/image';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { serverTimestamp } from 'firebase/firestore';
@@ -25,6 +26,16 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>(temple.aboutImageUrl || '');
   const [description, setDescription] = useState(temple.description || '');
+  const [socialMedia, setSocialMedia] = useState(temple.socialMedia || {});
+  const [dailyPrograms, setDailyPrograms] = useState<TempleProgram>(temple.dailyPrograms || {
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+    sunday: []
+  });
   const { toast } = useToast();
 
   const validateFile = (file: File): string | null => {
@@ -60,6 +71,13 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
     }
   };
 
+  const handleSocialMediaChange = (field: string, value: string) => {
+    setSocialMedia(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -89,6 +107,8 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
       const updateData: TempleUpdateData = {
         description,
         aboutImageUrl,
+        dailyPrograms,
+        socialMedia,
         updatedAt: serverTimestamp()
       };
 
@@ -113,12 +133,12 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>About Page Settings</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>About Page Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <div className="space-y-2">
             <label className="block text-sm font-medium">Temple Image</label>
             <div className="flex flex-col items-center gap-4">
@@ -156,12 +176,65 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
               className="w-full"
             />
           </div>
+        </CardContent>
+      </Card>
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Social Media & Contact</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Instagram</label>
+            <Input
+              value={socialMedia.instagram || ''}
+              onChange={(e) => handleSocialMediaChange('instagram', e.target.value)}
+              placeholder="Instagram profile URL"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Facebook</label>
+            <Input
+              value={socialMedia.facebook || ''}
+              onChange={(e) => handleSocialMediaChange('facebook', e.target.value)}
+              placeholder="Facebook page URL"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Website</label>
+            <Input
+              value={socialMedia.website || ''}
+              onChange={(e) => handleSocialMediaChange('website', e.target.value)}
+              placeholder="Website URL"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Phone</label>
+            <Input
+              value={socialMedia.telefon || ''}
+              onChange={(e) => handleSocialMediaChange('telefon', e.target.value)}
+              placeholder="Phone number"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Google Maps</label>
+            <Input
+              value={socialMedia.gmaps || ''}
+              onChange={(e) => handleSocialMediaChange('gmaps', e.target.value)}
+              placeholder="Google Maps URL"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <TempleProgramForm
+        programs={dailyPrograms}
+        onChange={setDailyPrograms}
+      />
+
+      <Button type="submit" disabled={loading} className="w-full">
+        {loading ? 'Saving...' : 'Save Changes'}
+      </Button>
+    </form>
   );
 }

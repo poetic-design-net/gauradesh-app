@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from "@/contexts/AuthContext";
-import { getTemple, Temple } from "@/lib/db/temples";
+import { getTemple, Temple, updateTemple } from "@/lib/db/temples";
 import { TempleAboutForm } from "@/components/admin/TempleAboutForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { doc, getDoc } from 'firebase/firestore';
@@ -12,10 +12,13 @@ import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { ImageUpload } from "@/components/ui/image-upload";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function AdminSettingsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [temple, setTemple] = useState<Temple | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -56,6 +59,24 @@ export default function AdminSettingsPage() {
     loadData();
   }, [user, router]);
 
+  const handleLogoUpload = async (url: string) => {
+    if (!temple) return;
+
+    try {
+      await updateTemple(temple.id, { logoUrl: url });
+      setTemple({ ...temple, logoUrl: url });
+      toast({
+        description: url ? 'Logo updated successfully' : 'Logo removed successfully'
+      });
+    } catch (error) {
+      console.error('Error updating logo:', error);
+      toast({
+        variant: 'destructive',
+        description: 'Failed to update logo'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -88,6 +109,25 @@ export default function AdminSettingsPage() {
           </Button>
         </Link>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Temple Logo</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-[200px]">
+            <ImageUpload
+              currentImageUrl={temple.logoUrl}
+              onUpload={handleLogoUpload}
+              path={`temples/${temple.id}/logo`}
+              aspectRatio="square"
+            />
+            <p className="text-sm text-muted-foreground mt-2">
+              Upload a square logo image. This will be displayed in the header and other places.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <TempleAboutForm 
         temple={temple} 

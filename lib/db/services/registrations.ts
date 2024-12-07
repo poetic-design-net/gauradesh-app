@@ -18,6 +18,7 @@ import { ServiceRegistration, SERVICE_REGISTRATIONS_COLLECTION } from './types';
 import { withRetry } from './utils';
 import { addTempleMember } from '../temples';
 import { isTempleAdmin, isSuperAdmin } from '../admin';
+import { getService } from './services';
 
 export async function deleteRegistration(registrationId: string, userId: string): Promise<void> {
   return withRetry(async () => {
@@ -40,18 +41,17 @@ export async function deleteRegistration(registrationId: string, userId: string)
       throw new FirebaseError('permission-denied', 'Only temple admins, super admins, or the registration owner can delete registrations');
     }
 
-    // If registration was approved, decrement the service's participant count
+    // Update service counts in Firestore
+    const serviceRef = doc(db, `temples/${registration.templeId}/services`, registration.serviceId);
     if (registration.status === 'approved') {
-      const serviceRef = doc(db, `temples/${registration.templeId}/services`, registration.serviceId);
       await updateDoc(serviceRef, {
         currentParticipants: increment(-1),
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
     } else if (registration.status === 'pending') {
-      const serviceRef = doc(db, `temples/${registration.templeId}/services`, registration.serviceId);
       await updateDoc(serviceRef, {
         pendingParticipants: increment(-1),
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
     }
 
@@ -119,45 +119,32 @@ export async function updateServiceRegistrationStatus(
       const registration = registrationDoc.data() as ServiceRegistration;
       const oldStatus = registration.status;
       
+      // Update registration status
       transaction.update(registrationRef, {
         status,
         updatedAt: serverTimestamp(),
       });
 
+      // Update service counts based on status change
       const serviceRef = doc(db, `temples/${templeId}/services`, serviceId);
-      
-      // Handle participant counts based on status changes
       if (oldStatus === 'pending') {
         transaction.update(serviceRef, {
           pendingParticipants: increment(-1),
           currentParticipants: status === 'approved' ? increment(1) : increment(0),
-          updatedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       } else if (oldStatus === 'approved') {
-        if (status === 'pending') {
-          transaction.update(serviceRef, {
-            currentParticipants: increment(-1),
-            pendingParticipants: increment(1),
-            updatedAt: serverTimestamp(),
-          });
-        } else if (status === 'rejected') {
-          transaction.update(serviceRef, {
-            currentParticipants: increment(-1),
-            updatedAt: serverTimestamp(),
-          });
-        }
+        transaction.update(serviceRef, {
+          currentParticipants: increment(-1),
+          pendingParticipants: status === 'pending' ? increment(1) : increment(0),
+          updatedAt: serverTimestamp()
+        });
       } else if (oldStatus === 'rejected') {
-        if (status === 'pending') {
-          transaction.update(serviceRef, {
-            pendingParticipants: increment(1),
-            updatedAt: serverTimestamp(),
-          });
-        } else if (status === 'approved') {
-          transaction.update(serviceRef, {
-            currentParticipants: increment(1),
-            updatedAt: serverTimestamp(),
-          });
-        }
+        transaction.update(serviceRef, {
+          pendingParticipants: status === 'pending' ? increment(1) : increment(0),
+          currentParticipants: status === 'approved' ? increment(1) : increment(0),
+          updatedAt: serverTimestamp()
+        });
       }
     });
   });
@@ -186,28 +173,31 @@ export async function registerForService(
         throw new FirebaseError('already-exists', 'You are already registered for this service');
       }
 
-      const serviceRef = doc(db, `temples/${templeId}/services`, serviceId);
-      const serviceDoc = await transaction.get(serviceRef);
-      
-      if (!serviceDoc.exists()) {
+      // Get service details
+      const service = await getService(serviceId, templeId);
+      if (!service) {
         throw new FirebaseError('not-found', 'Service not found');
       }
 
       const registrationRef = doc(collection(db, SERVICE_REGISTRATIONS_COLLECTION));
-      transaction.set(registrationRef, {
+      const registration: ServiceRegistration = {
         id: registrationRef.id,
         userId,
         serviceId,
         templeId,
+        serviceName: service.name,
+        serviceType: service.type,
+        serviceDate: service.date,
+        serviceTimeSlot: service.timeSlot,
         status: 'pending',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+        createdAt: serverTimestamp() as Timestamp,
+        updatedAt: serverTimestamp() as Timestamp,
+      };
 
-      // Update pending participants count
-      transaction.update(serviceRef, {
+      transaction.set(registrationRef, registration);
+      transaction.update(doc(db, `temples/${templeId}/services`, serviceId), {
         pendingParticipants: increment(1),
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
     });
 
@@ -249,8 +239,8 @@ export async function recalculateServiceParticipants(serviceId: string, templeId
     const pendingSnapshot = await getDocs(pendingQuery);
     const pendingCount = pendingSnapshot.size;
 
-    const serviceRef = doc(db, `temples/${templeId}/services`, serviceId);
-    await updateDoc(serviceRef, {
+    // Update Firestore
+    await updateDoc(doc(db, `temples/${templeId}/services`, serviceId), {
       currentParticipants: approvedCount,
       pendingParticipants: pendingCount,
       updatedAt: serverTimestamp(),

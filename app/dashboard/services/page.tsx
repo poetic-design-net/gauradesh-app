@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ServiceRegistration, getUserServiceRegistrations, getService, Service } from '@/lib/db/services';
+import { ServiceRegistration, getUserServiceRegistrations } from '@/lib/db/services';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 
 function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
   const variants = {
@@ -23,7 +24,7 @@ function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
 
 export default function ServicesPage() {
   const { user } = useAuth();
-  const [registrations, setRegistrations] = useState<Array<ServiceRegistration & { service?: Service }>>([]);
+  const [registrations, setRegistrations] = useState<ServiceRegistration[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,21 +33,7 @@ export default function ServicesPage() {
 
       try {
         const userRegistrations = await getUserServiceRegistrations(user.uid);
-        
-        // Fetch service details for each registration
-        const registrationsWithServices = await Promise.all(
-          userRegistrations.map(async (registration) => {
-            try {
-              const service = await getService(registration.serviceId, registration.templeId);
-              return { ...registration, service };
-            } catch (error) {
-              console.error(`Error loading service ${registration.serviceId}:`, error);
-              return registration;
-            }
-          })
-        );
-
-        setRegistrations(registrationsWithServices);
+        setRegistrations(userRegistrations);
       } catch (error) {
         console.error('Error loading registrations:', error);
       } finally {
@@ -92,22 +79,28 @@ export default function ServicesPage() {
             <Card key={registration.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="flex items-center space-x-2">
-                  {registration.service && (
-                    <ServiceIcon name={registration.service.name} className="h-4 w-4" />
-                  )}
+                  <ServiceIcon name={registration.serviceType} className="h-4 w-4" />
                   <CardTitle className="text-lg">
-                    {registration.service?.name || 'Unknown Service'}
+                    {registration.serviceName}
                   </CardTitle>
                 </div>
                 <StatusBadge status={registration.status} />
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {registration.service?.description || 'No description available'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Registered on: {registration.createdAt.toDate().toLocaleDateString()}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Type: {registration.serviceType}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Date: {formatFirebaseTimestamp(registration.serviceDate)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Time: {registration.serviceTimeSlot.start} - {registration.serviceTimeSlot.end}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Registered on: {registration.createdAt.toDate().toLocaleDateString()}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ))}

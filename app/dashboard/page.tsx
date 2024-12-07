@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile } from '@/lib/db/users';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
@@ -47,66 +46,71 @@ function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
   );
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { user } = useAuth();
   const router = useRouter();
   const { currentTemple } = useTempleContext();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [registrations, setRegistrations] = useState<EnrichedRegistration[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
 
   useEffect(() => {
-    async function loadData() {
-      if (user) {
-        try {
-          const [userProfile, userRegistrations, adminStatus] = await Promise.all([
-            getUserProfile(user.uid),
-            getUserServiceRegistrations(user.uid),
-            isAdmin(user.uid)
-          ]);
+    const loadData = async () => {
+      if (!user) return;
 
-          setIsUserAdmin(adminStatus);
+      try {
+        const [userProfile, userRegistrations, adminStatus] = await Promise.all([
+          getUserProfile(user.uid),
+          getUserServiceRegistrations(user.uid),
+          isAdmin(user.uid)
+        ]);
 
-          const enrichedRegistrations = await Promise.all(
-            userRegistrations.map(async (reg) => {
-              try {
-                const service = await getService(reg.serviceId, reg.templeId);
-                return { ...reg, service };
-              } catch (error) {
-                console.error(`Error loading service ${reg.serviceId}:`, error);
-                return reg;
-              }
-            })
-          );
+        const enrichedRegistrations = await Promise.all(
+          userRegistrations.map(async (reg) => {
+            try {
+              const service = await getService(reg.serviceId, reg.templeId);
+              return { ...reg, service };
+            } catch (error) {
+              console.error(`Error loading service ${reg.serviceId}:`, error);
+              // Return registration with a placeholder service object for deleted services
+              return { 
+                ...reg, 
+                service: {
+                  id: reg.serviceId,
+                  templeId: reg.templeId,
+                  name: '[Deleted Service]',
+                  description: 'This service is no longer available',
+                  type: 'unknown',
+                  maxParticipants: 0,
+                  currentParticipants: 0,
+                  pendingParticipants: 0,
+                  date: reg.createdAt, // Use registration date as fallback
+                  timeSlot: {
+                    start: '00:00',
+                    end: '00:00'
+                  },
+                  createdAt: reg.createdAt,
+                  updatedAt: reg.updatedAt,
+                  createdBy: ''
+                }
+              };
+            }
+          })
+        );
 
-          setProfile(userProfile);
-          setRegistrations(enrichedRegistrations);
-        } catch (error) {
-          console.error('Error loading dashboard data:', error);
-        } finally {
-          setLoading(false);
-        }
+        setProfile(userProfile);
+        setRegistrations(enrichedRegistrations);
+        setIsUserAdmin(adminStatus);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
       }
-    }
+    };
 
     loadData();
   }, [user]);
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-[200px] w-full" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8 animate-fadeIn">
+    <div className="content-fade-in space-y-8">
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 p-8 text-white">
         <div className="absolute inset-0 bg-black/10"></div>
@@ -249,5 +253,13 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="no-fouc">Loading...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }

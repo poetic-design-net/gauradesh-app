@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import EventForm from '@/components/events/EventForm';
+import EventForm from "@/components/events/EventForm";
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { useAuth } from '@/contexts/AuthContext';
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageLoading } from "@/components/ui/page-loading";
 
 const ADMIN_COLLECTION = 'admin';
 
@@ -52,7 +53,7 @@ export default function CreateEventPage({ params }: CreateEventPageProps) {
   }, [user, params.id, router]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <PageLoading />;
   }
 
   return (

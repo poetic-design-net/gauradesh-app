@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import EventForm from '@/components/events/EventForm';
+import EventForm from "@/components/events/EventForm";
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { useAuth } from '@/contexts/AuthContext';
-import { Event } from '@/lib/db/events/types';
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import { Event } from "@/lib/db/events/types";
+import { PageLoading } from "@/components/ui/page-loading";
 
 const ADMIN_COLLECTION = 'admin';
 const EVENTS_COLLECTION = 'events';
@@ -80,7 +81,7 @@ export default function EditEventPage({ params }: EditEventPageProps) {
   }, [user, params.id, params.eventId, router]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <PageLoading />;
   }
 
   if (!event) {

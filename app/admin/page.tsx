@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ServiceForm } from "@/components/admin/ServiceForm";
-import { ServiceTypeForm } from "@/components/admin/ServiceTypeForm";
+import { useAuth } from '@/contexts/AuthContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ServiceForm } from '@/components/admin/ServiceForm';
+import { ServiceTypeForm } from '@/components/admin/ServiceTypeForm';
+import { AdminDashboardSkeleton } from '@/components/admin/AdminDashboardSkeleton';
 import { 
   getAllServices, 
   getTempleServiceRegistrations,
@@ -19,16 +20,16 @@ import {
   Service,
   ServiceRegistration,
   ServiceType
-} from "@/lib/db/services";
-import { getTempleEvents, deleteEvent } from "@/lib/db/events/events";
-import { Event } from "@/lib/db/events/types";
-import { getUserProfile, UserProfile } from "@/lib/db/users";
-import { useToast } from "@/components/ui/use-toast";
-import { Plus, Trash2, RefreshCw } from 'lucide-react';
-import { type AdminData } from "@/lib/db/admin";
-import { formatFirebaseTimestamp } from "@/lib/utils";
+} from '@/lib/db/services';
+import { getTempleEvents, deleteEvent } from '@/lib/db/events/events';
+import { Event } from '@/lib/db/events/types';
+import { getUserProfile, UserProfile } from '@/lib/db/users';
+import { useToast } from '@/components/ui/use-toast';
+import { Plus, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { type AdminData } from '@/lib/db/admin';
+import { formatFirebaseTimestamp } from '@/lib/utils';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from "@/lib/firebase";
+import { db } from '@/lib/firebase';
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -39,7 +40,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
 const ADMIN_COLLECTION = 'admin';
 
@@ -47,25 +48,14 @@ async function getAdminData(uid: string): Promise<AdminData | null> {
   if (!uid) return null;
   
   try {
-    console.log('[getAdminData] Fetching admin data for uid:', uid);
     const adminRef = doc(db, ADMIN_COLLECTION, uid);
     const adminDoc = await getDoc(adminRef);
     const adminData = adminDoc.data();
-    console.log('[getAdminData] Admin doc exists:', adminDoc.exists(), 'Data:', adminData);
     
     if (adminDoc.exists() && adminData) {
-      // User has access if they are either:
-      // 1. A super admin
-      // 2. A temple admin with a valid templeId
       const hasAccess = 
         adminData.isSuperAdmin === true || 
         (adminData.isAdmin === true && adminData.templeId);
-
-      console.log('[getAdminData] Has access:', hasAccess, {
-        isSuperAdmin: adminData.isSuperAdmin,
-        isAdmin: adminData.isAdmin,
-        templeId: adminData.templeId
-      });
 
       if (hasAccess) {
         return {
@@ -76,7 +66,7 @@ async function getAdminData(uid: string): Promise<AdminData | null> {
     }
     return null;
   } catch (error) {
-    console.error('[getAdminData] Error getting admin data:', error);
+    console.error('[getAdminData] Error:', error);
     return null;
   }
 }
@@ -88,9 +78,12 @@ export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
   const [registrations, setRegistrations] = useState<
-    Array<ServiceRegistration & { user?: UserProfile; service?: Service }>
+    Array<ServiceRegistration & { user?: UserProfile }>
   >([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingRegistrations, setLoadingRegistrations] = useState(true);
+  const [loadingServiceTypes, setLoadingServiceTypes] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [showTypeForm, setShowTypeForm] = useState(false);
@@ -98,17 +91,92 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [deletingService, setDeletingService] = useState<Service | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const loadServices = async (adminData: AdminData) => {
+    try {
+      setLoadingServices(true);
+      const servicesData = adminData.templeId 
+        ? await getTempleServices(adminData.templeId)
+        : await getAllServices();
+      setServices(servicesData);
+    } catch (error) {
+      console.error('Error loading services:', error);
+      toast({
+        variant: 'destructive',
+        description: 'Failed to load services'
+      });
+    } finally {
+      setLoadingServices(false);
+    }
+  };
+
+  const loadEvents = async (adminData: AdminData) => {
+    try {
+      setLoadingEvents(true);
+      if (adminData.templeId) {
+        const eventsData = await getTempleEvents(adminData.templeId);
+        setEvents(eventsData);
+      }
+    } catch (error) {
+      console.error('Error loading events:', error);
+      toast({
+        variant: 'destructive',
+        description: 'Failed to load events'
+      });
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  const loadServiceTypes = async (adminData: AdminData) => {
+    try {
+      setLoadingServiceTypes(true);
+      const typesData = adminData.templeId
+        ? await getTempleServiceTypes(adminData.templeId)
+        : await getAllServiceTypes();
+      setServiceTypes(typesData);
+    } catch (error) {
+      console.error('Error loading service types:', error);
+      toast({
+        variant: 'destructive',
+        description: 'Failed to load service types'
+      });
+    } finally {
+      setLoadingServiceTypes(false);
+    }
+  };
+
+  const loadRegistrations = async (adminData: AdminData) => {
+    try {
+      setLoadingRegistrations(true);
+      if (adminData.templeId) {
+        const registrationsData = await getTempleServiceRegistrations(adminData.templeId);
+        const enrichedRegistrations = await Promise.all(
+          registrationsData.map(async (reg) => {
+            const user = await getUserProfile(reg.userId);
+            return { ...reg, user };
+          })
+        );
+        setRegistrations(enrichedRegistrations);
+      }
+    } catch (error) {
+      console.error('Error loading registrations:', error);
+      toast({
+        variant: 'destructive',
+        description: 'Failed to load registrations'
+      });
+    } finally {
+      setLoadingRegistrations(false);
+    }
+  };
 
   const loadData = async () => {
     if (!user) return;
 
     try {
-      setLoading(true);
       setError(null);
-
-      console.log('[loadData] Loading data for user:', user.uid);
       const adminResult = await getAdminData(user.uid);
-      console.log('[loadData] Admin result:', adminResult);
       
       if (!adminResult) {
         setError('Unauthorized access');
@@ -117,42 +185,18 @@ export default function AdminDashboard() {
 
       setAdminData(adminResult);
 
-      const [servicesData, typesData, eventsData] = await Promise.all([
-        adminResult.templeId ? getTempleServices(adminResult.templeId) : getAllServices(),
-        adminResult.templeId ? getTempleServiceTypes(adminResult.templeId) : getAllServiceTypes(),
-        adminResult.templeId ? getTempleEvents(adminResult.templeId) : []
+      await Promise.all([
+        loadServices(adminResult),
+        loadEvents(adminResult),
+        loadServiceTypes(adminResult)
       ]);
 
-      console.log('[loadData] Loaded services:', servicesData);
-      console.log('[loadData] Loaded service types:', typesData);
-      console.log('[loadData] Loaded events:', eventsData);
-
-      let registrationsData: ServiceRegistration[] = [];
       if (adminResult.templeId) {
-        registrationsData = await getTempleServiceRegistrations(adminResult.templeId);
-        console.log('[loadData] Loaded registrations:', registrationsData);
+        await loadRegistrations(adminResult);
       }
-
-      setServices(servicesData);
-      setServiceTypes(typesData);
-      setEvents(eventsData);
-
-      const enrichedRegistrations = await Promise.all(
-        registrationsData.map(async (reg) => {
-          const [user, service] = await Promise.all([
-            getUserProfile(reg.userId),
-            servicesData.find(s => s.id === reg.serviceId)
-          ]);
-          return { ...reg, user, service };
-        })
-      );
-
-      setRegistrations(enrichedRegistrations);
     } catch (err: any) {
-      console.error('[loadData] Error:', err);
+      console.error('Error:', err);
       setError(err.message || 'Failed to load data');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -166,8 +210,9 @@ export default function AdminDashboard() {
     if (!user?.uid || !adminData?.templeId) return;
 
     try {
+      setActionLoading(true);
       const registration = registrations.find(r => r.id === registrationId);
-      if (!registration?.service?.id) {
+      if (!registration?.serviceId) {
         throw new Error('Service not found for registration');
       }
 
@@ -175,15 +220,17 @@ export default function AdminDashboard() {
         registrationId,
         newStatus,
         adminData.templeId,
-        registration.service.id
+        registration.serviceId
       );
       toast({ description: 'Status updated successfully' });
-      loadData();
+      await loadRegistrations(adminData);
     } catch (error: any) {
       toast({
         variant: 'destructive',
         description: error.message || 'Failed to update status'
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -191,28 +238,28 @@ export default function AdminDashboard() {
     if (!user?.uid || !adminData?.templeId) return;
 
     try {
+      setActionLoading(true);
       await deleteRegistration(registrationId, user.uid);
       toast({ description: 'Registration deleted successfully' });
-      loadData();
+      await loadRegistrations(adminData);
     } catch (error: any) {
       toast({
         variant: 'destructive',
         description: error.message || 'Failed to delete registration'
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleDeleteService = async (service: Service) => {
     if (!adminData?.templeId) {
-      console.error('[handleDeleteService] No temple ID found in admin data');
       toast({
         variant: 'destructive',
         description: 'Missing temple ID'
       });
       return;
     }
-    console.log('[handleDeleteService] Starting delete for service:', service);
-    console.log('[handleDeleteService] Current admin data:', adminData);
     setDeletingService(service);
   };
 
@@ -228,26 +275,20 @@ export default function AdminDashboard() {
   };
 
   const confirmDeleteService = async () => {
-    if (!user?.uid || !deletingService || !adminData?.templeId) {
-      console.error('[confirmDeleteService] Missing required data:', {
-        userId: user?.uid,
-        deletingService: !!deletingService,
-        templeId: adminData?.templeId
-      });
-      return;
-    }
+    if (!user?.uid || !deletingService || !adminData?.templeId) return;
 
     try {
+      setActionLoading(true);
       await deleteService(deletingService.id, user.uid, adminData.templeId, true);
       toast({ description: 'Service deleted successfully' });
-      loadData();
+      await loadServices(adminData);
     } catch (error: any) {
-      console.error('[confirmDeleteService] Error:', error);
       toast({
         variant: 'destructive',
         description: error.message || 'Failed to delete service'
       });
     } finally {
+      setActionLoading(false);
       setDeletingService(null);
     }
   };
@@ -256,21 +297,23 @@ export default function AdminDashboard() {
     if (!deletingEvent || !adminData?.templeId) return;
 
     try {
+      setActionLoading(true);
       await deleteEvent(adminData.templeId, deletingEvent.id);
       toast({ description: 'Event deleted successfully' });
-      loadData();
+      await loadEvents(adminData);
     } catch (error: any) {
       toast({
         variant: 'destructive',
         description: error.message || 'Failed to delete event'
       });
     } finally {
+      setActionLoading(false);
       setDeletingEvent(null);
     }
   };
 
-  if (authLoading || loading) {
-    return <div>Loading...</div>;
+  if (authLoading || !adminData) {
+    return <AdminDashboardSkeleton />;
   }
 
   if (error) {
@@ -284,24 +327,41 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <div className="space-x-2">
-          <Button onClick={loadData} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            onClick={loadData} 
+            variant="outline" 
+            className="w-full sm:w-auto"
+            disabled={actionLoading}
+          >
+            {actionLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
             Refresh
           </Button>
-          <Button onClick={() => setShowTypeForm(true)}>
+          <Button 
+            onClick={() => setShowTypeForm(true)} 
+            className="w-full sm:w-auto"
+            disabled={actionLoading}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Service Type
           </Button>
-          <Button onClick={() => setShowServiceForm(true)}>
+          <Button 
+            onClick={() => setShowServiceForm(true)} 
+            className="w-full sm:w-auto"
+            disabled={actionLoading}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Service
           </Button>
           {adminData?.templeId && (
-            <Link href={`/temples/${adminData.templeId}/events/create`}>
-              <Button>
+            <Link href={`/temples/${adminData.templeId}/events/create`} className="w-full sm:w-auto">
+              <Button className="w-full" disabled={actionLoading}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Event
               </Button>
@@ -313,9 +373,9 @@ export default function AdminDashboard() {
       {showServiceForm && (
         <ServiceForm 
           onClose={() => setShowServiceForm(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowServiceForm(false);
-            loadData();
+            if (adminData) await loadServices(adminData);
           }}
           serviceTypes={serviceTypes}
           templeId={adminData?.templeId}
@@ -325,9 +385,9 @@ export default function AdminDashboard() {
       {showTypeForm && (
         <ServiceTypeForm
           onClose={() => setShowTypeForm(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowTypeForm(false);
-            loadData();
+            if (adminData) await loadServiceTypes(adminData);
           }}
           templeId={adminData?.templeId}
         />
@@ -338,45 +398,80 @@ export default function AdminDashboard() {
           <CardTitle>Events</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className="text-left p-2">Title</th>
-                  <th className="text-left p-2">Location</th>
-                  <th className="text-left p-2">Start Date</th>
-                  <th className="text-left p-2">End Date</th>
-                  <th className="text-left p-2">Capacity</th>
-                  <th className="text-left p-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((event) => (
-                  <tr key={event.id}>
-                    <td className="p-2">{event.title}</td>
-                    <td className="p-2">{event.location}</td>
-                    <td className="p-2">{event.startDate.toDate().toLocaleString()}</td>
-                    <td className="p-2">{event.endDate.toDate().toLocaleString()}</td>
-                    <td className="p-2">{event.capacity || 'Unlimited'}</td>
-                    <td className="p-2 space-x-2">
-                      <Link href={`/temples/${adminData?.templeId}/events/${event.id}/edit`}>
-                        <Button size="sm" variant="outline">
-                          Edit
-                        </Button>
-                      </Link>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteEvent(event)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {loadingEvents ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <div className="h-4 w-[250px] bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-[200px] bg-muted animate-pulse rounded" />
+                  </div>
+                  <div className="h-8 w-[100px] bg-muted animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th className="px-4 py-3 text-left text-sm font-medium">Title</th>
+                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Location</th>
+                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Start Date</th>
+                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">End Date</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Capacity</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {events.map((event) => (
+                        <tr key={event.id} className="hover:bg-muted/50">
+                          <td className="px-4 py-3 text-sm">
+                            <div>{event.title}</div>
+                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                              {event.location}<br />
+                              {event.startDate.toDate().toLocaleString()}
+                            </div>
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">{event.location}</td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                            {event.startDate.toDate().toLocaleString()}
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                            {event.endDate.toDate().toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-sm">{event.capacity || 'Unlimited'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex gap-2">
+                              <Link href={`/temples/${adminData?.templeId}/events/${event.id}/edit`}>
+                                <Button size="sm" variant="outline" disabled={actionLoading}>
+                                  Edit
+                                </Button>
+                              </Link>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleDeleteEvent(event)}
+                                disabled={actionLoading}
+                              >
+                                {actionLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -385,43 +480,77 @@ export default function AdminDashboard() {
           <CardTitle>Services</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className="text-left p-2">Name</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-left p-2">Time</th>
-                  <th className="text-left p-2">Participants</th>
-                  <th className="text-left p-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((service) => (
-                  <tr key={service.id}>
-                    <td className="p-2">{service.name}</td>
-                    <td className="p-2">{service.type}</td>
-                    <td className="p-2">{formatFirebaseTimestamp(service.date)}</td>
-                    <td className="p-2">{service.timeSlot.start} - {service.timeSlot.end}</td>
-                    <td className="p-2">
-                      {service.currentParticipants}/{service.maxParticipants}
-                      {service.pendingParticipants > 0 && ` (${service.pendingParticipants} pending)`}
-                    </td>
-                    <td className="p-2">
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteService(service)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {loadingServices ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <div className="h-4 w-[250px] bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-[200px] bg-muted animate-pulse rounded" />
+                  </div>
+                  <div className="h-8 w-[100px] bg-muted animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th className="px-4 py-3 text-left text-sm font-medium">Name</th>
+                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Type</th>
+                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Date</th>
+                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Time</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Participants</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {services.map((service) => (
+                        <tr key={service.id} className="hover:bg-muted/50">
+                          <td className="px-4 py-3 text-sm">
+                            <div>{service.name}</div>
+                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                              {service.type}<br />
+                              {formatFirebaseTimestamp(service.date)}<br />
+                              {service.timeSlot.start} - {service.timeSlot.end}
+                            </div>
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">{service.type}</td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                            {formatFirebaseTimestamp(service.date)}
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                            {service.timeSlot.start} - {service.timeSlot.end}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {service.currentParticipants}/{service.maxParticipants}
+                            {service.pendingParticipants > 0 && ` (${service.pendingParticipants} pending)`}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteService(service)}
+                              disabled={actionLoading}
+                            >
+                              {actionLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -431,48 +560,83 @@ export default function AdminDashboard() {
             <CardTitle>Registrations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left p-2">Service</th>
-                    <th className="text-left p-2">User</th>
-                    <th className="text-left p-2">Status</th>
-                    <th className="text-left p-2">Date</th>
-                    <th className="text-left p-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registrations.map((reg) => (
-                    <tr key={reg.id}>
-                      <td className="p-2">{reg.service?.name}</td>
-                      <td className="p-2">{reg.user?.email}</td>
-                      <td className="p-2">
-                        <select
-                          value={reg.status}
-                          onChange={(e) => handleStatusUpdate(reg.id, e.target.value as ServiceRegistration['status'])}
-                          className="border rounded p-1"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="approved">Approved</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                      </td>
-                      <td className="p-2">{formatFirebaseTimestamp(reg.createdAt)}</td>
-                      <td className="p-2">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteRegistration(reg.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {loadingRegistrations ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <div className="h-4 w-[250px] bg-muted animate-pulse rounded" />
+                      <div className="h-3 w-[200px] bg-muted animate-pulse rounded" />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="h-8 w-[100px] bg-muted animate-pulse rounded" />
+                      <div className="h-8 w-[40px] bg-muted animate-pulse rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <div className="inline-block min-w-full align-middle">
+                  <div className="overflow-hidden">
+                    <table className="min-w-full divide-y divide-border">
+                      <thead>
+                        <tr className="bg-muted/50">
+                          <th className="px-4 py-3 text-left text-sm font-medium">Service</th>
+                          <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">User</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                          <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Date</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {registrations.map((reg) => (
+                          <tr key={reg.id} className="hover:bg-muted/50">
+                            <td className="px-4 py-3 text-sm">
+                              <div>{reg.serviceName}</div>
+                              <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                                {reg.user?.email}<br />
+                                {formatFirebaseTimestamp(reg.createdAt)}
+                              </div>
+                            </td>
+                            <td className="hidden sm:table-cell px-4 py-3 text-sm">{reg.user?.email}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <select
+                                value={reg.status}
+                                onChange={(e) => handleStatusUpdate(reg.id, e.target.value as ServiceRegistration['status'])}
+                                className="w-full sm:w-auto border rounded p-2"
+                                disabled={actionLoading}
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                              </select>
+                            </td>
+                            <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                              {formatFirebaseTimestamp(reg.createdAt)}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleDeleteRegistration(reg.id)}
+                                disabled={actionLoading}
+                              >
+                                {actionLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -486,8 +650,15 @@ export default function AdminDashboard() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteService} className="bg-red-600">
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteService} 
+              className="bg-red-600"
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -503,8 +674,15 @@ export default function AdminDashboard() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteEvent} className="bg-red-600">
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteEvent} 
+              className="bg-red-600"
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

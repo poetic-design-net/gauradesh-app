@@ -20,12 +20,30 @@ const TEMPLES_COLLECTION = 'temples';
 const TEMPLE_ADMINS_COLLECTION = 'temple_admins';
 const TEMPLE_MEMBERS_COLLECTION = 'temple_members';
 
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface DailyProgram {
+  time: string;
+  activity: string;
+}
+
+export type TempleProgram = Record<DayOfWeek, DailyProgram[]>;
+
 export interface Temple {
   id: string;
   name: string;
   location: string;
   description?: string;
   aboutImageUrl?: string;
+  logoUrl?: string;
+  dailyPrograms?: TempleProgram;
+  socialMedia?: {
+    instagram?: string;
+    facebook?: string;
+    website?: string;
+    telefon?: string;
+    gmaps?: string;
+  };
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
@@ -64,6 +82,17 @@ export async function createTemple(
       location: data.location || '',
       description: data.description,
       aboutImageUrl: data.aboutImageUrl,
+      logoUrl: data.logoUrl,
+      dailyPrograms: data.dailyPrograms || {
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: [],
+        saturday: [],
+        sunday: []
+      },
+      socialMedia: data.socialMedia || {},
       createdAt: serverTimestamp() as Timestamp,
       updatedAt: serverTimestamp() as Timestamp,
       createdBy: userId,
@@ -83,9 +112,12 @@ export async function createTemple(
 
 export async function getAllTemples(): Promise<Temple[]> {
   try {
+    console.log('Fetching all temples...');
     const templesRef = collection(db, TEMPLES_COLLECTION);
     const snapshot = await getDocs(templesRef);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Temple));
+    const temples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Temple));
+    console.log('Temples fetched:', temples);
+    return temples;
   } catch (error) {
     console.error('Error fetching temples:', error);
     throw new FirebaseError('unknown', 'Failed to fetch temples');

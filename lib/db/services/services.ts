@@ -134,9 +134,6 @@ export async function deleteService(serviceId: string, userId: string, templeId:
         throw new FirebaseError('not-found', 'Service not found');
       }
       
-      const serviceData = serviceDoc.data() as Service;
-      console.log('[deleteService] Service data:', serviceData);
-      
       // Check for registrations if not force deleting
       if (!force) {
         console.log('[deleteService] Checking for registrations...');
@@ -151,13 +148,8 @@ export async function deleteService(serviceId: string, userId: string, templeId:
         
         // Just delete the service if no registrations
         console.log('[deleteService] No registrations found, proceeding with deletion');
-        try {
-          await deleteDoc(serviceRef);
-          console.log('[deleteService] Service deleted successfully');
-        } catch (error) {
-          console.error('[deleteService] Error deleting service:', error);
-          throw error;
-        }
+        await deleteDoc(serviceRef);
+        console.log('[deleteService] Service deleted successfully');
       } else {
         // If force is true, delete all registrations first, then delete the service
         console.log('[deleteService] Force delete: removing registrations...');
@@ -184,13 +176,8 @@ export async function deleteService(serviceId: string, userId: string, templeId:
         console.log('[deleteService] Added service to batch');
         
         // Commit the batch
-        try {
-          await batch.commit();
-          console.log('[deleteService] Batch committed successfully');
-        } catch (error) {
-          console.error('[deleteService] Error committing batch:', error);
-          throw error;
-        }
+        await batch.commit();
+        console.log('[deleteService] Batch committed successfully');
       }
       
       console.log('[deleteService] Delete completed successfully');

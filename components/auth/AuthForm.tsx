@@ -83,7 +83,7 @@ export function AuthForm() {
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: 'Failed to load temples',
+          description: 'Failed to load temples. Please try again.',
         });
       }
     }
@@ -94,7 +94,9 @@ export function AuthForm() {
   }, [isSignUp, toast]);
 
   async function onSubmit(values: SignUpValues | SignInValues) {
+    if (isLoading) return; // Prevent multiple submissions
     setIsLoading(true);
+    
     try {
       if (isSignUp) {
         const signUpValues = values as SignUpValues;
@@ -104,6 +106,11 @@ export function AuthForm() {
           signUpValues.displayName,
           signUpValues.templeId
         );
+        
+        // Reset form after successful signup
+        form.reset();
+        setIsSignUp(false);
+        
         toast({
           title: 'Account created successfully!',
           description: 'You can now sign in with your credentials.',
@@ -117,10 +124,31 @@ export function AuthForm() {
         });
       }
     } catch (error) {
+      console.error('Auth error:', error);
+      
+      // Handle specific error types
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('auth/email-already-in-use')) {
+          errorMessage = 'This email is already registered. Please sign in instead.';
+        } else if (error.message.includes('auth/invalid-email')) {
+          errorMessage = 'Invalid email address.';
+        } else if (error.message.includes('auth/weak-password')) {
+          errorMessage = 'Password is too weak. Please use a stronger password.';
+        } else if (error.message.includes('auth/user-not-found')) {
+          errorMessage = 'No account found with this email.';
+        } else if (error.message.includes('auth/wrong-password')) {
+          errorMessage = 'Incorrect password.';
+        } else if (error.message.includes('permission')) {
+          errorMessage = 'Unable to create profile. Please try again or contact support.';
+        }
+      }
+      
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'An error occurred',
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -153,6 +181,7 @@ export function AuthForm() {
                       placeholder="example@email.com" 
                       {...field}
                       className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                      disabled={isLoading}
                     />
                   </FormControl>
                   <FormMessage className="text-red-300" />
@@ -171,6 +200,7 @@ export function AuthForm() {
                         placeholder="Your name" 
                         {...field}
                         className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                        disabled={isLoading}
                       />
                     </FormControl>
                     <FormMessage className="text-red-300" />
@@ -190,6 +220,7 @@ export function AuthForm() {
                       placeholder="••••••" 
                       {...field}
                       className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                      disabled={isLoading}
                     />
                   </FormControl>
                   <FormMessage className="text-red-300" />
@@ -203,7 +234,11 @@ export function AuthForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-white">Temple</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      disabled={isLoading}
+                    >
                       <FormControl>
                         <SelectTrigger className="bg-white/10 border-white/20 text-white">
                           <SelectValue placeholder="Select a temple" />
@@ -234,8 +269,9 @@ export function AuthForm() {
         <div className="mt-4 text-center">
           <Button
             variant="link"
-            onClick={() => setIsSignUp(!isSignUp)}
+            onClick={() => !isLoading && setIsSignUp(!isSignUp)}
             className="text-sm text-gray-200 hover:text-white"
+            disabled={isLoading}
           >
             {isSignUp
               ? 'Already have an account? Sign in'

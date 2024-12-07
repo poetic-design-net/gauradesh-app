@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { EventList } from '@/components/events';
-import { Button } from '@/components/ui/button';
+import { EventList } from "@/components/events";
+import { Button } from "@/components/ui/button";
 import Link from 'next/link';
 import { doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { useAuth } from '@/contexts/AuthContext';
-import { Event } from '@/lib/db/events/types';
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import { Event } from "@/lib/db/events/types";
+import { EventLoading } from "@/components/events/EventLoading";
 
 const ADMIN_COLLECTION = 'admin';
 
@@ -25,6 +26,7 @@ export default function EventsPage({ params }: EventsPageProps) {
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
       try {
         // Check admin status
         if (user) {
@@ -53,16 +55,15 @@ export default function EventsPage({ params }: EventsPageProps) {
       } catch (error) {
         console.error('Error loading events:', error);
       } finally {
-        setLoading(false);
+        // Add a small delay to prevent flash of loading state
+        setTimeout(() => {
+          setLoading(false);
+        }, 300);
       }
     }
 
     loadData();
   }, [user, params.id]);
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <div className="container mx-auto py-6">
@@ -74,7 +75,11 @@ export default function EventsPage({ params }: EventsPageProps) {
           </Link>
         )}
       </div>
-      <EventList events={events} templeId={params.id} />
+      {loading ? (
+        <EventLoading />
+      ) : (
+        <EventList events={events} templeId={params.id} />
+      )}
     </div>
   );
 }

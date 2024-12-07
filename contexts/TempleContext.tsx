@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Temple, getTemple } from '../lib/db/temples';
 import { useAuth } from './AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 // Collection references
@@ -85,8 +85,32 @@ export function TempleProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Set up real-time listener for user document
   useEffect(() => {
+    if (!user?.uid || !initialized) return;
+
+    // Subscribe to user document changes
+    const userRef = doc(db, USERS_COLLECTION, user.uid);
+    const unsubscribe = onSnapshot(userRef, async (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const userData = docSnapshot.data();
+        if (userData?.templeId) {
+          try {
+            const temple = await getTemple(userData.templeId);
+            setCurrentTemple(temple);
+          } catch (error) {
+            console.error('[TempleContext] Error loading temple:', error);
+          }
+        }
+      }
+    }, (error) => {
+      console.error('[TempleContext] Error in user document listener:', error);
+    });
+
+    // Initial load
     loadTempleData();
+
+    return () => unsubscribe();
   }, [user?.uid, initialized]);
 
   // Don't render children while Firebase is initializing

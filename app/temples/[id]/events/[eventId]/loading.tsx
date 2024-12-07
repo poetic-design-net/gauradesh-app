@@ -1,6 +1,6 @@
 import { EventLoading } from "@/components/events/EventLoading"
 
-export default function EventsLoadingPage() {
+export default function EventLoadingPage() {
   return (
     <div className="no-fouc">
       <EventLoading />

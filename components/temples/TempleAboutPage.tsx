@@ -1,13 +1,13 @@
 'use client';
 
-import { Temple, getTempleMembers, TempleMember } from '@/lib/db/temples';
+import { Temple, getTempleMembers, TempleMember, DayOfWeek } from '@/lib/db/temples';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import { getUserProfile, UserProfile } from '@/lib/db/users';
 import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Crown, User } from 'lucide-react';
+import { Users, Crown, User, Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface TempleAboutPageProps {
@@ -21,6 +21,29 @@ interface EnrichedMember extends TempleMember {
 export function TempleAboutPage({ temple }: TempleAboutPageProps) {
   const [members, setMembers] = useState<EnrichedMember[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getCurrentDayPrograms = () => {
+    if (!temple.dailyPrograms) return [];
+    
+    const days: DayOfWeek[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const currentDay = days[new Date().getDay()];
+    return temple.dailyPrograms[currentDay];
+  };
+
+  const formatTime = (time: string) => {
+    try {
+      const [hours, minutes] = time.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours), parseInt(minutes));
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return time;
+    }
+  };
 
   useEffect(() => {
     async function loadMembers() {
@@ -49,6 +72,9 @@ export function TempleAboutPage({ temple }: TempleAboutPageProps) {
 
     loadMembers();
   }, [temple.id]);
+
+  const currentDayPrograms = getCurrentDayPrograms();
+  const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
   return (
     <div className="min-h-screen relative">
@@ -86,6 +112,46 @@ export function TempleAboutPage({ temple }: TempleAboutPageProps) {
             </p>
           </CardContent>
         </Card>
+
+        {/* Daily Program Section */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Calendar className="h-6 w-6 text-primary dark:text-purple-400" />
+            <h2 className="text-2xl font-bold text-foreground dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r from-purple-400 to-pink-400">
+              Today's Temple Program
+            </h2>
+          </div>
+
+          <Card className="bg-card/50 dark:bg-white/10 backdrop-blur-lg border-border dark:border-white/20">
+            <CardContent className="pt-6">
+              <p className="text-lg font-medium mb-4 text-foreground dark:text-gray-200">
+                {currentDay}
+              </p>
+              
+              {currentDayPrograms.length > 0 ? (
+                <div className="space-y-4">
+                  {currentDayPrograms.map((program, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-4 rounded-lg bg-background/50 dark:bg-white/5 backdrop-blur-sm"
+                    >
+                      <span className="font-medium text-foreground dark:text-gray-200">
+                        {formatTime(program.time)}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {program.activity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground italic">
+                  No programs scheduled for today
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Members Section */}
         <div className="space-y-6">

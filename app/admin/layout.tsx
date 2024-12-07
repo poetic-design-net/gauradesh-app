@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Navigation } from '@/components/layout/Navigation';
 
 export default function AdminLayout({
   children,
@@ -87,15 +86,8 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
-      <div className="hidden md:block w-64 border-r">
-        <Navigation />
-      </div>
-      <div className="flex-1 overflow-auto">
-        <div className="container mx-auto p-4">
-          {children}
-        </div>
-      </div>
+    <div className="container mx-auto p-4">
+      {children}
     </div>
   );
 }

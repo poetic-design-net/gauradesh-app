@@ -36,6 +36,13 @@ export interface ServiceRegistration {
   userId: string;
   serviceId: string;
   templeId: string;
+  serviceName: string;
+  serviceType: string;
+  serviceDate: Timestamp;
+  serviceTimeSlot: {
+    start: string;
+    end: string;
+  };
   status: 'pending' | 'approved' | 'rejected';
   createdAt: Timestamp;
   updatedAt: Timestamp;

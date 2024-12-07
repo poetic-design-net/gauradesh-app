@@ -6,7 +6,7 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
     }
     
     function getAdminDoc() {
@@ -52,9 +52,27 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      // Allow reading user profiles
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && 
-        request.resource.data.keys().hasOnly(['email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']);
+      
+      // Allow creating own profile with all necessary fields
+      allow create: if request.auth != null && 
+        request.auth.uid == userId &&
+        request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'photoURL', 'bio',
+          'isAdmin', 'isSuperAdmin', 'templeId',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'bio',
+          'isAdmin', 'isSuperAdmin', 'templeId',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.isAdmin == false &&
+        request.resource.data.isSuperAdmin == false;
+      
+      // Allow updating own profile or admin updates
       allow update: if isAuthenticated() && (
         (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['displayName', 'photoURL', 'updatedAt'])) || 
@@ -62,6 +80,8 @@ service cloud.firestore {
           .hasOnly(['status', 'updatedAt'])) ||
         isSuperAdmin()
       );
+      
+      // Allow deleting own profile or super admin deletes
       allow delete: if isOwner(userId) || isSuperAdmin();
     }
 
@@ -99,18 +119,22 @@ service cloud.firestore {
     }
 
     match /temples/{templeId} {
-      allow read: if isAuthenticated();
+      // Allow reading temples without authentication for sign-up
+      allow read: if true;
       allow create: if isAuthenticated() && isSuperAdmin() && 
         request.resource.data.keys().hasOnly([
-          'name', 'description', 'aboutImageUrl', 'address',
-          'phone', 'email', 'website', 'createdAt', 'updatedAt'
+          'name', 'description', 'aboutImageUrl', 'logoUrl', 'address',
+          'phone', 'email', 'website', 'dailyPrograms', 'socialMedia',
+          'createdAt', 'updatedAt'
         ]);
       allow update: if isAuthenticated() && (
         (isTempleAdmin(templeId) && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['description', 'aboutImageUrl', 'phone', 'email', 'website', 'updatedAt'])) ||
+          .hasOnly(['description', 'aboutImageUrl', 'logoUrl', 'phone', 'email', 'website', 
+                   'dailyPrograms', 'socialMedia', 'updatedAt'])) ||
         (isSuperAdmin() && request.resource.data.keys().hasOnly([
-          'name', 'description', 'aboutImageUrl', 'address',
-          'phone', 'email', 'website', 'createdAt', 'updatedAt'
+          'name', 'description', 'aboutImageUrl', 'logoUrl', 'address',
+          'phone', 'email', 'website', 'dailyPrograms', 'socialMedia',
+          'createdAt', 'updatedAt'
         ]))
       );
       allow delete: if isAuthenticated() && isSuperAdmin();

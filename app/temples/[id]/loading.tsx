@@ -1,5 +1,9 @@
-import { PageLoading } from "@/components/ui/page-loading"
+import { TempleLoading } from "@/components/temples/TempleLoading"
 
-export default function TempleLoading() {
-  return <PageLoading items={2} />
+export default function TempleLoadingPage() {
+  return (
+    <div className="no-fouc">
+      <TempleLoading />
+    </div>
+  )
 }

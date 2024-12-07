@@ -2,6 +2,11 @@
 
 import { Button } from '@/components/ui/button';
 import { LucideIcon } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface NavigationLinkProps {
   icon: LucideIcon;
@@ -9,6 +14,7 @@ interface NavigationLinkProps {
   onClick: () => void;
   variant?: 'default' | 'ghost' | 'destructive';
   className?: string;
+  showLabel?: boolean;
 }
 
 export function NavigationLink({ 
@@ -16,16 +22,34 @@ export function NavigationLink({
   label, 
   onClick, 
   variant = 'ghost',
-  className = ''
+  className = '',
+  showLabel = false
 }: NavigationLinkProps) {
-  return (
+  const button = (
     <Button
       variant={variant}
-      className={`w-full justify-start ${className}`}
+      className={`relative h-10 ${showLabel ? 'w-full justify-start' : 'w-10'} ${className}`}
       onClick={onClick}
     >
-      <Icon className="mr-2 h-4 w-4" />
-      {label}
+      <Icon className="h-5 w-5 absolute left-2.5" />
+      {showLabel && (
+        <span className="pl-8">{label}</span>
+      )}
     </Button>
+  );
+
+  if (showLabel) {
+    return button;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {button}
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        <p>{label}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

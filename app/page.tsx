@@ -6,7 +6,7 @@ import { AuthForm } from '@/components/auth/AuthForm';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { HeartHandshake, FileText, ArrowRight, Bell } from 'lucide-react';
+import { HeartHandshake, FileText, ArrowRight, Bell, Calendar, User, MessageSquare } from 'lucide-react';
 import { getUserProfile, type UserProfile } from '@/lib/db/users';
 import { useTempleContext } from '@/contexts/TempleContext';
 
@@ -106,6 +106,46 @@ export default function Home() {
                   </button>
                 </Card>
               )}
+
+              {currentTemple && (
+                <Card className="group bg-white/10 border-white/20 hover:bg-white/20 transition-all duration-300 backdrop-blur-lg">
+                  <button
+                    onClick={() => router.push(`/temples/${currentTemple.id}/events`)}
+                    className="p-6 text-left w-full h-full"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <Calendar className="h-8 w-8 text-green-400" />
+                      <ArrowRight className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Events</h3>
+                    <p className="text-gray-300 text-sm">View upcoming temple events and festivals</p>
+                  </button>
+                </Card>
+              )}
+
+              <Card className="group bg-white/10 border-white/20 hover:bg-white/20 transition-all duration-300 backdrop-blur-lg">
+                <button
+                  onClick={() => router.push('/dashboard/profile')}
+                  className="p-6 text-left w-full h-full"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <User className="h-8 w-8 text-yellow-400" />
+                    <ArrowRight className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">My Account</h3>
+                  <p className="text-gray-300 text-sm">Manage your personal information and preferences</p>
+                </button>
+              </Card>
+
+              <Card className="group bg-white/10 border-white/20 hover:bg-white/20 transition-all duration-300 backdrop-blur-lg">
+                <div className="p-6 text-left w-full h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <MessageSquare className="h-8 w-8 text-orange-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">Admin Message</h3>
+                  <p className="text-gray-300 text-sm">Welcome to our temple portal! We're blessed to have you as part of our community. Join us for daily arati at 7 AM and 7 PM.</p>
+                </div>
+              </Card>
             </div>
 
             {/* Decorative Elements */}
