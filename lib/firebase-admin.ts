@@ -1,6 +1,7 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { db as clientDb } from './firebase';
+import serviceAccount from '@/isckon-a55f5-firebase-adminsdk-qcejk-a5d466170e.json';
 
 // Collection references
 export const USERS_COLLECTION = 'users';
@@ -14,11 +15,7 @@ export const SETTINGS_COLLECTION = 'settings';
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
+    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount)
   });
 }
 
