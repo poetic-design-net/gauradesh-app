@@ -21,15 +21,17 @@ import { useToast } from '@/components/ui/use-toast';
 import { updateUserProfile } from '@/lib/db/users';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Upload, Loader2, Camera } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { UserProfile } from '@/lib/db/users';
+import { FirebaseError } from '@/lib/firebase-error';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 const profileSchema = z.object({
-  displayName: z.string().min(2, 'Display name must be at least 2 characters'),
+  displayName: z.string().optional(),
   bio: z.string().max(160, 'Bio must be less than 160 characters').optional(),
   photoURL: z.union([
     z.string().url('Must be a valid URL').optional(),
@@ -39,7 +41,11 @@ const profileSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
-export function UserProfileForm() {
+interface UserProfileFormProps {
+  initialProfile: UserProfile;
+}
+
+export function UserProfileForm({ initialProfile }: UserProfileFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const { user } = useAuth();
@@ -48,16 +54,15 @@ export function UserProfileForm() {
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      displayName: user?.displayName || '',
-      bio: '',
-      photoURL: user?.photoURL || '',
+      displayName: initialProfile?.displayName || '',
+      bio: initialProfile?.bio || '',
+      photoURL: initialProfile?.photoURL || '',
     },
   });
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (!user) return;
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       toast({
         variant: 'destructive',
@@ -67,7 +72,6 @@ export function UserProfileForm() {
       return;
     }
 
-    // Validate file type
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       toast({
         variant: 'destructive',
@@ -79,17 +83,10 @@ export function UserProfileForm() {
 
     setIsUploading(true);
     try {
-      // Create a reference to the user's profile image
       const storageRef = ref(storage, `users/${user.uid}/profile-image`);
-      
-      // Upload the file
       await uploadBytes(storageRef, file);
-      
-      // Get the download URL
       const downloadURL = await getDownloadURL(storageRef);
-      
-      // Update the form
-      form.setValue('photoURL', downloadURL);
+      form.setValue('photoURL', downloadURL, { shouldDirty: true });
       
       toast({
         title: 'Success',
@@ -124,25 +121,33 @@ export function UserProfileForm() {
   async function onSubmit(values: ProfileFormValues) {
     if (!user) return;
 
-    // Clean up empty strings for optional fields
-    const cleanedValues = {
-      ...values,
-      photoURL: values.photoURL || null,
-      bio: values.bio || null,
-    };
+    const dirtyFields = Object.keys(form.formState.dirtyFields) as Array<keyof ProfileFormValues>;
+    const updatedValues = dirtyFields.reduce((acc, field) => {
+      acc[field] = values[field];
+      return acc;
+    }, {} as Partial<ProfileFormValues>);
+
+    if (Object.keys(updatedValues).length === 0) {
+      toast({
+        title: 'No changes',
+        description: 'No changes were made to your profile.',
+      });
+      return;
+    }
 
     setIsLoading(true);
     try {
-      await updateUserProfile(user.uid, cleanedValues);
+      await updateUserProfile(user.uid, updatedValues);
       toast({
         title: 'Profile updated',
         description: 'Your profile has been updated successfully.',
       });
+      form.reset(values);
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to update profile',
+        description: error instanceof FirebaseError ? error.message : 'Failed to update profile',
       });
     } finally {
       setIsLoading(false);
@@ -150,9 +155,10 @@ export function UserProfileForm() {
   }
 
   const photoURL = form.watch('photoURL');
+  const displayName = form.watch('displayName');
 
   return (
-    <Card className="w-full max-w-2xl">
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>Edit Profile</CardTitle>
       </CardHeader>
@@ -166,7 +172,7 @@ export function UserProfileForm() {
                 <Avatar className="h-24 w-24">
                   <AvatarImage src={photoURL || undefined} />
                   <AvatarFallback className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 text-2xl">
-                    {form.watch('displayName')?.[0] || user?.email?.[0]}
+                    {displayName?.[0] || user?.email?.[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div className="space-y-2">
@@ -208,7 +214,7 @@ export function UserProfileForm() {
                       variant="outline"
                       size="sm"
                       className="w-full"
-                      onClick={() => form.setValue('photoURL', '')}
+                      onClick={() => form.setValue('photoURL', '', { shouldDirty: true })}
                     >
                       Remove Photo
                     </Button>
@@ -253,7 +259,7 @@ export function UserProfileForm() {
             />
 
             <Button type="submit" disabled={isLoading || isUploading}>
-              {isLoading ? 'Saving...' : 'Save Profile'}
+              {isLoading ? 'Saving...' : 'Save Changes'}
             </Button>
           </form>
         </Form>

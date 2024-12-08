@@ -10,7 +10,11 @@ import {
   Timestamp,
   increment,
   updateDoc,
-  runTransaction
+  runTransaction,
+  onSnapshot,
+  orderBy,
+  QuerySnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { FirebaseError } from '../../firebase-error';
@@ -19,6 +23,27 @@ import { withRetry } from './utils';
 import { addTempleMember } from '../temples';
 import { isTempleAdmin, isSuperAdmin } from '../admin';
 import { getService } from './services';
+import { createNotification } from '../notifications';
+
+// Helper function to convert Firestore timestamps
+function convertTimestamps(data: any): any {
+  if (!data) return data;
+  
+  const result = { ...data };
+  
+  // Convert known timestamp fields
+  if (result.createdAt instanceof Timestamp) {
+    result.createdAt = result.createdAt;
+  }
+  if (result.updatedAt instanceof Timestamp) {
+    result.updatedAt = result.updatedAt;
+  }
+  if (result.serviceDate instanceof Timestamp) {
+    result.serviceDate = result.serviceDate;
+  }
+  
+  return result;
+}
 
 export async function deleteRegistration(registrationId: string, userId: string, message?: string): Promise<void> {
   return withRetry(async () => {
@@ -55,6 +80,22 @@ export async function deleteRegistration(registrationId: string, userId: string,
       });
     }
 
+    // Create notification for the user if admin deleted it
+    if ((userIsSuperAdmin || userIsTempleAdmin) && registration.userId !== userId) {
+      try {
+        await createNotification({
+          userId: registration.userId,
+          title: 'Service Registration Cancelled',
+          message: `Your registration for "${registration.serviceName}" has been cancelled by an admin${message ? `: ${message}` : '.'}`,
+          type: 'warning',
+          read: false,
+          timestamp: new Date()
+        });
+      } catch (error) {
+        console.error('Error creating deletion notification:', error);
+      }
+    }
+
     // Delete the registration
     await deleteDoc(registrationRef);
   });
@@ -69,7 +110,7 @@ export async function getTempleServiceRegistrations(templeId: string): Promise<S
     const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
     const q = query(registrationsRef, where('templeId', '==', templeId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceRegistration));
+    return snapshot.docs.map(doc => convertTimestamps({ id: doc.id, ...doc.data() })) as ServiceRegistration[];
   });
 }
 
@@ -97,8 +138,62 @@ export async function getUserServiceRegistrations(userId: string): Promise<Servi
     const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
     const q = query(registrationsRef, where('userId', '==', userId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceRegistration));
+    return snapshot.docs.map(doc => convertTimestamps({ id: doc.id, ...doc.data() })) as ServiceRegistration[];
   });
+}
+
+// Real-time registration updates
+export function subscribeToUserRegistrations(
+  userId: string,
+  onUpdate: (registrations: ServiceRegistration[]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  if (!userId) {
+    onUpdate([]);
+    return () => {};
+  }
+
+  try {
+    const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
+    const q = query(
+      registrationsRef,
+      where('userId', '==', userId),
+      orderBy('serviceDate', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      {
+        next: (snapshot: QuerySnapshot<DocumentData>) => {
+          const registrations = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+              serviceDate: data.serviceDate
+            } as ServiceRegistration;
+          });
+          onUpdate(registrations);
+        },
+        error: (error: Error) => {
+          console.error('Error in registration subscription:', error);
+          if (onError) {
+            onError(error);
+          }
+        }
+      }
+    );
+
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up registration subscription:', error);
+    if (onError) {
+      onError(error as Error);
+    }
+    return () => {};
+  }
 }
 
 export async function updateServiceRegistrationStatus(
@@ -108,45 +203,76 @@ export async function updateServiceRegistrationStatus(
   serviceId: string
 ): Promise<void> {
   return withRetry(async () => {
-    await runTransaction(db, async (transaction) => {
-      const registrationRef = doc(db, SERVICE_REGISTRATIONS_COLLECTION, registrationId);
-      const registrationDoc = await transaction.get(registrationRef);
-      
-      if (!registrationDoc.exists()) {
-        throw new FirebaseError('not-found', 'Registration not found');
-      }
+    const registrationRef = doc(db, SERVICE_REGISTRATIONS_COLLECTION, registrationId);
+    const registrationDoc = await getDoc(registrationRef);
+    
+    if (!registrationDoc.exists()) {
+      throw new FirebaseError('not-found', 'Registration not found');
+    }
 
-      const registration = registrationDoc.data() as ServiceRegistration;
-      const oldStatus = registration.status;
-      
-      // Update registration status
-      transaction.update(registrationRef, {
-        status,
-        updatedAt: serverTimestamp(),
-      });
+    const registration = registrationDoc.data() as ServiceRegistration;
+    const oldStatus = registration.status;
 
-      // Update service counts based on status change
-      const serviceRef = doc(db, `temples/${templeId}/services`, serviceId);
-      if (oldStatus === 'pending') {
-        transaction.update(serviceRef, {
-          pendingParticipants: increment(-1),
-          currentParticipants: status === 'approved' ? increment(1) : increment(0),
-          updatedAt: serverTimestamp()
-        });
-      } else if (oldStatus === 'approved') {
-        transaction.update(serviceRef, {
-          currentParticipants: increment(-1),
-          pendingParticipants: status === 'pending' ? increment(1) : increment(0),
-          updatedAt: serverTimestamp()
-        });
-      } else if (oldStatus === 'rejected') {
-        transaction.update(serviceRef, {
-          pendingParticipants: status === 'pending' ? increment(1) : increment(0),
-          currentParticipants: status === 'approved' ? increment(1) : increment(0),
-          updatedAt: serverTimestamp()
-        });
-      }
+    // Update registration status directly first
+    await updateDoc(registrationRef, {
+      status,
+      updatedAt: serverTimestamp(),
     });
+
+    // Then update service counts
+    const serviceRef = doc(db, `temples/${templeId}/services`, serviceId);
+    if (oldStatus === 'pending') {
+      await updateDoc(serviceRef, {
+        pendingParticipants: increment(-1),
+        currentParticipants: status === 'approved' ? increment(1) : increment(0),
+        updatedAt: serverTimestamp()
+      });
+    } else if (oldStatus === 'approved') {
+      await updateDoc(serviceRef, {
+        currentParticipants: increment(-1),
+        pendingParticipants: status === 'pending' ? increment(1) : increment(0),
+        updatedAt: serverTimestamp()
+      });
+    } else if (oldStatus === 'rejected') {
+      await updateDoc(serviceRef, {
+        pendingParticipants: status === 'pending' ? increment(1) : increment(0),
+        currentParticipants: status === 'approved' ? increment(1) : increment(0),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    // Create notification for the user about status change
+    try {
+      let notificationTitle = '';
+      let notificationType: 'success' | 'warning' | 'info' = 'info';
+      
+      switch (status) {
+        case 'approved':
+          notificationTitle = 'Service Registration Approved';
+          notificationType = 'success';
+          break;
+        case 'rejected':
+          notificationTitle = 'Service Registration Rejected';
+          notificationType = 'warning';
+          break;
+        case 'pending':
+          notificationTitle = 'Service Registration Status Updated';
+          notificationType = 'info';
+          break;
+      }
+
+      await createNotification({
+        userId: registration.userId,
+        title: notificationTitle,
+        message: `Your registration for "${registration.serviceName}" has been ${status}.`,
+        type: notificationType,
+        link: `/temples/${templeId}/services/${serviceId}`,
+        read: false,
+        timestamp: new Date()
+      });
+    } catch (error) {
+      console.error('Error creating status change notification:', error);
+    }
   });
 }
 
@@ -201,6 +327,24 @@ export async function registerForService(
         pendingParticipants: increment(1),
         updatedAt: serverTimestamp()
       });
+
+      // Create notification for service contact person
+      if (service.contactPerson?.userId) {
+        try {
+          const formattedDate = service.date.toDate().toLocaleDateString();
+          await createNotification({
+            userId: service.contactPerson.userId,
+            title: 'New Service Registration',
+            message: `A new registration request for "${service.name}" (${formattedDate}) is pending approval.`,
+            type: 'info',
+            link: `/temples/${templeId}/services/${serviceId}`,
+            read: false,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          console.error('Error creating registration notification:', error);
+        }
+      }
     });
 
     // Try to add user as temple member, ignore if they're already a member

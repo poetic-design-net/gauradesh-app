@@ -131,12 +131,12 @@ function DashboardContent() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-end space-x-4">
+      <div className="block sm:flex justify-end space-y-2 sm:space-y-0 sm:space-x-4">
         {currentTemple && (
           <Button
             variant="outline"
             onClick={() => router.push(`/temples/${currentTemple.id}/about`)}
-            className="group transition-all duration-300 hover:bg-primary hover:text-primary-foreground"
+            className="group w-full sm:w-auto transition-all duration-300 hover:bg-primary hover:text-primary-foreground"
           >
             <FileText className="mr-2 h-4 w-4 transition-transform group-hover:scale-110" />
             About Temple
@@ -147,7 +147,7 @@ function DashboardContent() {
           <Button
             variant="outline"
             onClick={() => router.push('/admin/settings')}
-            className="group transition-all duration-300 hover:bg-blue-600 hover:text-white"
+            className="group  w-full sm:w-auto transition-all duration-300 hover:bg-blue-600 hover:text-white"
           >
             <Settings className="mr-2 h-4 w-4 transition-transform group-hover:rotate-90" />
             Admin Settings

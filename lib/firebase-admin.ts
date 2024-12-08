@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { db as clientDb } from './firebase';
 
 // Collection references
@@ -10,6 +11,8 @@ export const SERVICE_REGISTRATIONS_COLLECTION = 'service_registrations';
 export const TEMPLES_COLLECTION = 'temples';
 export const ADMIN_COLLECTION = 'admin';
 export const SETTINGS_COLLECTION = 'settings';
+export const NOTIFICATIONS_COLLECTION = 'notifications';
+export const QUICK_LINKS_COLLECTION = 'quickLinks';
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -26,10 +29,9 @@ if (!admin.apps.length) {
   }
 }
 
-// Export the admin instance
+// Export the admin instance and services
 export const adminDb = getFirestore();
-
-// Export the client db for client-side use
+export const auth = getAuth();
 export const db = clientDb;
 
 // Error handling

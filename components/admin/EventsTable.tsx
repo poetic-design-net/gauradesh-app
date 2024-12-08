@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Trash2, Loader2 } from 'lucide-react';
 import { ExpandableText } from './ExpandableText';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface EventsTableProps {
   events: Event[];
@@ -10,14 +11,44 @@ interface EventsTableProps {
   isLoading: boolean;
 }
 
+function TableSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-[250px]" />
+            <Skeleton className="h-3 w-[200px]" />
+          </div>
+          <Skeleton className="h-8 w-[100px]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function EventsTable({ events, onDeleteEvent, isLoading }: EventsTableProps) {
+  // If there's no data yet, show skeleton
+  if (events.length === 0) {
+    return (
+      <Card className="shadow-lg">
+        <CardHeader className="border-b">
+          <CardTitle>Events</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4 sm:pt-6">
+          <TableSkeleton />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="shadow-lg">
       <CardHeader className="border-b">
         <CardTitle>Events</CardTitle>
       </CardHeader>
       <CardContent className="pt-4 sm:pt-6">
-        <div className="overflow-x-auto sm:-mx-4">
+        <div className="overflow-x-auto">
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden rounded-lg border">
               <table className="min-w-full divide-y divide-border">

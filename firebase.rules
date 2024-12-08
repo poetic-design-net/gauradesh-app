@@ -49,6 +49,46 @@ service cloud.firestore {
         (news.expiresAt == null || news.expiresAt is timestamp);
     }
 
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+        request.resource.data.keys().hasAll([
+          'userId', 'title', 'message', 'timestamp', 'read'
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          'userId', 'title', 'message', 'timestamp', 'read',
+          'type', 'link'
+        ]) &&
+        (request.resource.data.userId == request.auth.uid || isAdmin());  // Allow admins to create notifications for others
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+
+    // Quick Links collection
+    match /quickLinks/{linkId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+        request.resource.data.keys().hasAll([
+          'userId', 'title', 'url', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          'userId', 'title', 'url', 'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['title', 'url', 'updatedAt']);
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+
     // Root admin collection
     match /admin/{adminId} {
       allow read: if isAuthenticated();
@@ -166,10 +206,14 @@ service cloud.firestore {
             'id', 'title', 'description', 'location',
             'startDate', 'endDate', 'capacity',
             'registrationRequired', 'imageUrl',
-            'templeId', 'createdAt', 'updatedAt'
+            'templeId', 'participants', 'createdAt', 'updatedAt'
           ]);
-        allow update: if isAuthenticated() && 
-          isTempleAdmin(templeId);
+        allow update: if isAuthenticated() && (
+          isTempleAdmin(templeId) ||
+          // Allow participants to register/unregister themselves
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'updatedAt']) &&
+           request.auth != null)
+        );
         allow delete: if isAuthenticated() && 
           isTempleAdmin(templeId);
       }

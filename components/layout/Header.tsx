@@ -9,7 +9,7 @@ import { useNavigation } from '@/contexts/NavigationContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Flower2, X, Menu } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { HeaderActions } from '@/components/layout/HeaderActions';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -57,21 +57,22 @@ export function Header() {
             </span>
           </Link>
 
-          {/* Right side - Theme Toggle and Menu */}
+          {/* Right side - Actions */}
           <div className="flex items-center space-x-2 ml-auto">
-            <div className="flex items-center justify-center w-10 h-10">
-              <ThemeToggle />
-            </div>
-            {!user && (
-              <button
-                className="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors"
-                onClick={toggleMenu}
-                aria-label="Toggle menu"
-              >
-                {isMenuOpen ? (
-                  <X className="h-5 w-5" />
-                ) : null}
-              </button>
+            {user ? (
+              <HeaderActions />
+            ) : (
+              <>
+                <button
+                  className="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors"
+                  onClick={toggleMenu}
+                  aria-label="Toggle menu"
+                >
+                  {isMenuOpen ? (
+                    <X className="h-5 w-5" />
+                  ) : null}
+                </button>
+              </>
             )}
           </div>
         </div>

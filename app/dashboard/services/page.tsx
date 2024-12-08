@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServiceRegistration } from '@/lib/db/services/types';
-import { getUserServiceRegistrations } from '@/lib/db/services/registrations';
+import { subscribeToUserRegistrations } from '@/lib/db/services/registrations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
 import { formatFirebaseTimestamp } from '@/lib/utils';
 
 function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
-  const variants = {
+  const variants: Record<ServiceRegistration['status'], string> = {
     pending: 'bg-yellow-100 text-yellow-800',
     approved: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
@@ -27,22 +27,39 @@ export default function ServicesPage() {
   const { user } = useAuth();
   const [registrations, setRegistrations] = useState<ServiceRegistration[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadRegistrations() {
-      if (!user) return;
-
-      try {
-        const userRegistrations = await getUserServiceRegistrations(user.uid);
-        setRegistrations(userRegistrations);
-      } catch (error) {
-        console.error('Error loading registrations:', error);
-      } finally {
-        setLoading(false);
-      }
+    if (!user) {
+      setLoading(false);
+      return;
     }
 
-    loadRegistrations();
+    setLoading(true);
+    setError(null);
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToUserRegistrations(
+      user.uid,
+      (updatedRegistrations: ServiceRegistration[]) => {
+        // Sort registrations by date, most recent first
+        const sortedRegistrations = [...updatedRegistrations].sort((a, b) => 
+          b.serviceDate.toMillis() - a.serviceDate.toMillis()
+        );
+        setRegistrations(sortedRegistrations);
+        setLoading(false);
+      },
+      (error: Error) => {
+        console.error('Error loading registrations:', error);
+        setError('Failed to load registrations');
+        setLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+    };
   }, [user]);
 
   if (loading) {
@@ -59,6 +76,30 @@ export default function ServicesPage() {
           </Card>
         ))}
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-center text-red-500">
+            {error}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-center text-muted-foreground">
+            Please sign in to view your services.
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -104,9 +145,16 @@ export default function ServicesPage() {
                       <p className="text-sm text-gray-500 mt-1">{registration.message}</p>
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Registered on: {registration.createdAt.toDate().toLocaleDateString()}
-                  </p>
+                  <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
+                    <span>
+                      Registered on: {registration.createdAt.toDate().toLocaleDateString()}
+                    </span>
+                    {registration.updatedAt && registration.updatedAt.toMillis() > registration.createdAt.toMillis() && (
+                      <span>
+                        Last updated: {registration.updatedAt.toDate().toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

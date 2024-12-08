@@ -103,12 +103,7 @@ export default function AdminSettingsPage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Temple Settings</h1>
-        <Link href={`/temples/${temple.id}/about`} target="_blank">
-          <Button variant="outline" className="gap-2">
-            <ExternalLink className="h-4 w-4" />
-            View About Page
-          </Button>
-        </Link>
+
       </div>
 
       <Card>

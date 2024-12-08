@@ -1,26 +1,29 @@
 'use client';
 
-import { Temple, getTempleMembers, TempleMember, DayOfWeek } from '@/lib/db/temples';
+import { Temple, DayOfWeek, TempleMember } from '@/lib/db/temples';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
-import { getUserProfile, UserProfile } from '@/lib/db/users';
 import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, Crown, User, Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-
-interface TempleAboutPageProps {
-  temple: Temple;
-}
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { UserProfile } from '@/lib/db/users';
 
 interface EnrichedMember extends TempleMember {
   profile: UserProfile;
 }
 
-export function TempleAboutPage({ temple }: TempleAboutPageProps) {
-  const [members, setMembers] = useState<EnrichedMember[]>([]);
-  const [loading, setLoading] = useState(true);
+interface TempleAboutPageProps {
+  temple: Temple;
+  initialMembers: EnrichedMember[];
+}
+
+export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps) {
+  const [members, setMembers] = useState<EnrichedMember[]>(initialMembers);
+  const [loading, setLoading] = useState(false);
 
   const getCurrentDayPrograms = () => {
     if (!temple.dailyPrograms) return [];
@@ -45,32 +48,45 @@ export function TempleAboutPage({ temple }: TempleAboutPageProps) {
     }
   };
 
+  // Subscribe to real-time updates for members
   useEffect(() => {
-    async function loadMembers() {
+    const adminsRef = collection(db, `temples/${temple.id}/temple_admins`);
+    const membersRef = collection(db, `temples/${temple.id}/temple_members`);
+    
+    const unsubscribeAdmins = onSnapshot(adminsRef, async (snapshot) => {
+      setLoading(true);
       try {
-        const templeMembers = await getTempleMembers(temple.id);
-        const enrichedMembers = await Promise.all(
-          templeMembers.map(async (member) => {
-            const profile = await getUserProfile(member.userId);
-            return { ...member, profile };
-          })
-        );
-
-        const sortedMembers = enrichedMembers.sort((a, b) => {
-          if (a.role === 'admin' && b.role !== 'admin') return -1;
-          if (a.role !== 'admin' && b.role === 'admin') return 1;
-          return (a.profile.displayName || '').localeCompare(b.profile.displayName || '');
-        });
-
-        setMembers(sortedMembers);
+        const response = await fetch(`/api/temples/members?templeId=${temple.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMembers(data.members);
+        }
       } catch (error) {
-        console.error('Error loading temple members:', error);
+        console.error('Error fetching updated members:', error);
       } finally {
         setLoading(false);
       }
-    }
+    });
 
-    loadMembers();
+    const unsubscribeMembers = onSnapshot(membersRef, async (snapshot) => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/temples/members?templeId=${temple.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMembers(data.members);
+        }
+      } catch (error) {
+        console.error('Error fetching updated members:', error);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      unsubscribeAdmins();
+      unsubscribeMembers();
+    };
   }, [temple.id]);
 
   const currentDayPrograms = getCurrentDayPrograms();
@@ -79,7 +95,7 @@ export function TempleAboutPage({ temple }: TempleAboutPageProps) {
   return (
     <div className="min-h-screen relative">
       {/* Background with Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b dark:from-purple-500/10 dark:to-pink-500/10" />
+      <div className="absolute inset-0" />
       
       {/* Content */}
       <div className="relative container mx-auto p-6 space-y-8">

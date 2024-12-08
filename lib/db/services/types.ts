@@ -3,6 +3,12 @@ import { Timestamp } from 'firebase/firestore';
 export const SERVICE_TYPES_COLLECTION = 'service_types';
 export const SERVICE_REGISTRATIONS_COLLECTION = 'service_registrations';
 
+export interface ServiceParticipant {
+  userId: string;
+  displayName?: string;
+  photoURL?: string;
+}
+
 export interface Service {
   id: string;
   templeId: string;
@@ -12,6 +18,7 @@ export interface Service {
   maxParticipants: number;
   currentParticipants: number;
   pendingParticipants: number;
+  participants?: ServiceParticipant[];
   date: Timestamp;
   timeSlot: {
     start: string;
@@ -20,9 +27,9 @@ export interface Service {
   contactPerson: {
     name: string;
     phone: string;
-    userId?: string; // Added to track service leader
+    userId?: string;
   };
-  notes?: string; // Added for service leader notes
+  notes: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
@@ -54,3 +61,8 @@ export interface ServiceRegistration {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+// Helper type for service updates
+export type ServiceUpdate = Partial<Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'currentParticipants' | 'pendingParticipants' | 'date'>> & {
+  date?: Date;
+};

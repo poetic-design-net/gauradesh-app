@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { createService, ServiceType, Service, updateService, deleteService } from '@/lib/db/services';
-import { X, CalendarIcon, Trash2, AlertTriangle } from 'lucide-react';
+import { CalendarIcon, Trash2, AlertTriangle } from 'lucide-react';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
 import { useTempleContext } from '@/contexts/TempleContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -57,8 +57,7 @@ const formSchema = z.object({
   }),
   contactPerson: z.object({
     name: z.string().min(2, 'Contact person name must be at least 2 characters'),
-    phone: z.string().regex(/^\+?[0-9\s-()]{8,}$/, 'Please enter a valid phone number'),
-    userId: z.string().optional() // Make userId optional to allow external contacts
+    phone: z.string().regex(/^\+?[0-9\s-()]{8,}$/, 'Please enter a valid phone number')
   })
 });
 
@@ -94,10 +93,12 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
         start: '09:00',
         end: '10:00'
       },
-      contactPerson: service?.contactPerson || {
+      contactPerson: service?.contactPerson ? {
+        name: service.contactPerson.name,
+        phone: service.contactPerson.phone
+      } : {
         name: '',
-        phone: '',
-        userId: undefined // Allow undefined for external contacts
+        phone: ''
       }
     },
   });
@@ -114,6 +115,11 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
 
     setIsLoading(true);
     try {
+      const contactPerson = {
+        ...values.contactPerson,
+        userId: user.uid
+      };
+
       if (service) {
         await updateService(service.id, user.uid, effectiveTempleId, {
           name: values.name,
@@ -122,7 +128,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           type: values.type,
           date: values.date,
           timeSlot: values.timeSlot,
-          contactPerson: values.contactPerson
+          contactPerson
         });
         toast({
           variant: 'success',
@@ -137,7 +143,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           type: values.type,
           date: values.date,
           timeSlot: values.timeSlot,
-          contactPerson: values.contactPerson
+          contactPerson
         });
         toast({
           variant: 'success',
@@ -159,16 +165,13 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
   }
 
   const handleDelete = useCallback(async () => {
-    if (!service || !user || !effectiveTempleId || deleteInProgressRef.current) {
-      return;
-    }
+    if (!service || !user || !effectiveTempleId || deleteInProgressRef.current) return;
 
     deleteInProgressRef.current = true;
     setIsLoading(true);
     
     try {
       await deleteService(service.id, user.uid, effectiveTempleId, true);
-      
       toast({
         variant: 'success',
         title: 'Success',
@@ -202,88 +205,18 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
   return (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="Service name" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Service Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a service type">
-                        {field.value && (
-                          <div className="flex items-center gap-2">
-                            <ServiceIcon name={field.value} className="h-4 w-4" />
-                            <span>{serviceTypes.find(t => t.name === field.value)?.name || field.value}</span>
-                          </div>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {serviceTypes.map((type) => (
-                      <SelectItem key={type.id} value={type.name}>
-                        <div className="flex items-center gap-2">
-                          <ServiceIcon name={type.icon} className="h-4 w-4" />
-                          <span>{type.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea 
-                    placeholder="Describe the service"
-                    className="resize-none"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="space-y-4 p-4 rounded-lg bg-muted">
-            <h3 className="font-medium">Service Leader Contact</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Enter the contact details for the service leader. They don't need to be registered in the app.
-            </p>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Basic Info Section */}
+          <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="contactPerson.name"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Contact person name" {...field} />
+                      <Input placeholder="Service name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -292,82 +225,103 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
 
               <FormField
                 control={form.control}
-                name="contactPerson.phone"
+                name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="+1 234 567 8900" {...field} />
-                    </FormControl>
+                    <FormLabel>Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type">
+                            {field.value && (
+                              <div className="flex items-center gap-2">
+                                <ServiceIcon name={field.value} className="h-4 w-4" />
+                                <span>{serviceTypes.find(t => t.name === field.value)?.name || field.value}</span>
+                              </div>
+                            )}
+                          </SelectValue>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {serviceTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.name}>
+                            <div className="flex items-center gap-2">
+                              <ServiceIcon name={type.icon} className="h-4 w-4" />
+                              <span>{type.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Describe the service"
+                      className="resize-none h-20"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
 
-          <FormField
-            control={form.control}
-            name="maxParticipants"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Maximum Participants</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    min={1}
-                    {...field}
-                    onChange={e => field.onChange(parseInt(e.target.value))}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {/* Schedule Section */}
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem className="col-span-1">
+                  <FormLabel>Date</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) =>
+                          date < new Date(new Date().setHours(0, 0, 0, 0))
+                        }
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Date</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date: Date) =>
-                        date < new Date(new Date().setHours(0, 0, 0, 0))
-                      }
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="timeSlot.start"
@@ -375,10 +329,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
                 <FormItem>
                   <FormLabel>Start Time</FormLabel>
                   <FormControl>
-                    <Input
-                      type="time"
-                      {...field}
-                    />
+                    <Input type="time" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -392,9 +343,56 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
                 <FormItem>
                   <FormLabel>End Time</FormLabel>
                   <FormControl>
-                    <Input
-                      type="time"
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* Contact and Capacity Section */}
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="contactPerson.name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Your name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="contactPerson.phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Phone</FormLabel>
+                  <FormControl>
+                    <Input placeholder="+1 234 567 8900" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="maxParticipants"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Max Participants</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      min={1}
                       {...field}
+                      onChange={e => field.onChange(parseInt(e.target.value))}
                     />
                   </FormControl>
                   <FormMessage />
@@ -403,7 +401,8 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
             />
           </div>
 
-          <div className="flex justify-between">
+          {/* Actions */}
+          <div className="flex justify-between pt-4 border-t">
             {service && (
               <Button
                 type="button"
@@ -416,15 +415,15 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
                 disabled={isLoading || deleteInProgressRef.current}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete Service
+                Delete
               </Button>
             )}
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 ml-auto">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? (service ? 'Updating...' : 'Creating...') : (service ? 'Update Service' : 'Create Service')}
+                {isLoading ? (service ? 'Updating...' : 'Creating...') : (service ? 'Update' : 'Create')}
               </Button>
             </div>
           </div>

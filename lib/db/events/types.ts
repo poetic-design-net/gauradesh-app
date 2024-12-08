@@ -1,5 +1,12 @@
 import { Timestamp } from 'firebase/firestore';
 
+export interface EventParticipant {
+  userId: string;
+  photoURL?: string;
+  displayName?: string;
+  registeredAt: Timestamp;
+}
+
 export interface Event {
   id: string;
   templeId: string;
@@ -13,6 +20,7 @@ export interface Event {
   registrationRequired: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  participants?: EventParticipant[];
 }
 
 export interface CreateEventData {

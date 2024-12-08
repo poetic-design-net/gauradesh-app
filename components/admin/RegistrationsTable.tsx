@@ -85,15 +85,15 @@ export function RegistrationsTable({
                             <div className="min-w-[4rem] text-xs font-medium text-muted-foreground">Date</div>
                             <div className="flex-1 text-sm">{formatFirebaseTimestamp(reg.createdAt)}</div>
                           </div>
-                          {reg.message && (
-                            <div className="flex space-x-2">
-                              <div className="min-w-[4rem] text-xs font-medium text-muted-foreground pt-0.5">Message</div>
-                              <div className="flex-1 text-sm italic text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                                <ExpandableText text={reg.message} maxLength={100} />
-                              </div>
-                            </div>
-                          )}
                         </div>
+                        {reg.message && (
+                          <div className="sm:hidden mt-2.5 border-t border-border/50 pt-2.5">
+                            <div className="text-xs font-medium text-muted-foreground mb-1.5">Message</div>
+                            <div className="text-sm italic text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                              <ExpandableText text={reg.message} maxLength={200} />
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="hidden sm:table-cell px-4 py-3 text-sm break-words">{reg.user?.email}</td>
                       <td className="px-3 sm:px-4 py-2 sm:py-3 text-sm">

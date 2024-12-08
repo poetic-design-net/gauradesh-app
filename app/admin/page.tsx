@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { AdminDashboardSkeleton } from '@/components/admin/AdminDashboardSkeleton';
@@ -94,6 +94,7 @@ export default function AdminDashboard() {
   const [deletingService, setDeletingService] = useState<Service | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const loadServices = async (adminData: AdminData) => {
     try {
@@ -187,18 +188,21 @@ export default function AdminDashboard() {
 
       setAdminData(adminResult);
 
+      // Load all data in parallel
       await Promise.all([
         loadServices(adminResult),
         loadEvents(adminResult),
-        loadServiceTypes(adminResult)
+        loadServiceTypes(adminResult),
+        adminResult.templeId ? loadRegistrations(adminResult) : Promise.resolve()
       ]);
-
-      if (adminResult.templeId) {
-        await loadRegistrations(adminResult);
-      }
     } catch (err: any) {
       console.error('Error:', err);
       setError(err.message || 'Failed to load data');
+    } finally {
+      // Small delay to ensure smooth transition
+      setTimeout(() => {
+        setIsInitialLoad(false);
+      }, 100);
     }
   };
 
@@ -225,7 +229,6 @@ export default function AdminDashboard() {
         registration.serviceId
       );
       toast({ 
-        variant: 'success',
         description: 'Status updated successfully' 
       });
       await loadRegistrations(adminData);
@@ -246,7 +249,6 @@ export default function AdminDashboard() {
       setActionLoading(true);
       await deleteRegistration(registrationId, user.uid);
       toast({ 
-        variant: 'success',
         description: 'Registration deleted successfully' 
       });
       await loadRegistrations(adminData);
@@ -289,7 +291,6 @@ export default function AdminDashboard() {
       setActionLoading(true);
       await deleteService(deletingService.id, user.uid, adminData.templeId, true);
       toast({ 
-        variant: 'success',
         description: 'Service deleted successfully' 
       });
       await loadServices(adminData);
@@ -311,7 +312,6 @@ export default function AdminDashboard() {
       setActionLoading(true);
       await deleteEvent(adminData.templeId, deletingEvent.id);
       toast({ 
-        variant: 'success',
         description: 'Event deleted successfully' 
       });
       await loadEvents(adminData);
@@ -326,7 +326,7 @@ export default function AdminDashboard() {
     }
   };
   
-  if (authLoading || !adminData) {
+  if (authLoading || isInitialLoad || !adminData) {
     return <AdminDashboardSkeleton />;
   }
 
@@ -339,8 +339,10 @@ export default function AdminDashboard() {
     );
   }
 
+  const isLoading = loadingServices || loadingEvents || loadingRegistrations || loadingServiceTypes;
+
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-6 animate-in fade-in-50 duration-500">
       <AdminHeader
         onRefresh={loadData}
         onAddServiceType={() => setShowTypeForm(true)}
@@ -372,25 +374,31 @@ export default function AdminDashboard() {
         />
       )}
 
-      <EventsTable
-        events={events}
-        onDeleteEvent={handleDeleteEvent}
-        isLoading={actionLoading}
-      />
+      {isLoading ? (
+        <AdminDashboardSkeleton />
+      ) : (
+        <>
+          <EventsTable
+            events={events}
+            onDeleteEvent={handleDeleteEvent}
+            isLoading={actionLoading}
+          />
 
-      <ServicesTable
-        services={services}
-        onDeleteService={handleDeleteService}
-        isLoading={actionLoading}
-      />
+          <ServicesTable
+            services={services}
+            onDeleteService={handleDeleteService}
+            isLoading={actionLoading}
+          />
 
-      {adminData?.templeId && (
-        <RegistrationsTable
-          registrations={registrations}
-          onStatusUpdate={handleStatusUpdate}
-          onDeleteRegistration={handleDeleteRegistration}
-          isLoading={actionLoading}
-        />
+          {adminData?.templeId && (
+            <RegistrationsTable
+              registrations={registrations}
+              onStatusUpdate={handleStatusUpdate}
+              onDeleteRegistration={handleDeleteRegistration}
+              isLoading={actionLoading}
+            />
+          )}
+        </>
       )}
 
       <AlertDialog open={deletingService !== null} onOpenChange={() => setDeletingService(null)}>
@@ -408,9 +416,7 @@ export default function AdminDashboard() {
               className="bg-red-600 hover:bg-red-700"
               disabled={actionLoading}
             >
-              {actionLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
+              {actionLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -432,9 +438,7 @@ export default function AdminDashboard() {
               className="bg-red-600 hover:bg-red-700"
               disabled={actionLoading}
             >
-              {actionLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
+              {actionLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -10,7 +10,7 @@ import { ArrowRight, Calendar, Clock, Edit, Trash2, Phone, User, StickyNote } fr
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ServiceRegistration, SERVICE_REGISTRATIONS_COLLECTION } from '@/lib/db/services/types';
 import { deleteRegistration } from '@/lib/db/services/registrations';
@@ -51,6 +51,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
   const [selectedUserId, setSelectedUserId] = useState<string>('none');
   const [notes, setNotes] = useState(service.notes || '');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingContact, setIsEditingContact] = useState(false);
 
   // Check if current user is the service leader
   const isServiceLeader = user?.uid === service.contactPerson?.userId;
@@ -158,7 +159,6 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
       setSelectedUserId(userId);
       
       if (userId === 'none') {
-        // Don't clear the manual inputs when "None" is selected
         await updateService(service.id, user!.uid, service.templeId, {
           contactPerson: {
             name: manualContactName,
@@ -183,6 +183,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
       console.error('Failed to update service leader:', error);
     } finally {
       setIsLoading(false);
+      setIsEditingContact(false);
     }
   };
 
@@ -198,6 +199,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
           userId: selectedUserId !== 'none' ? selectedUserId : undefined,
         }
       });
+      setIsEditingContact(false);
     } catch (error) {
       console.error('Failed to update contact information:', error);
     } finally {
@@ -227,7 +229,11 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm group-hover:scale-110 transition-transform duration-300">
-              <ServiceIcon name={service.type || 'default'} className="h-6 w-6 text-purple-400" />
+              <ServiceIcon 
+                name={service.type} 
+                className="h-6 w-6 text-purple-400"
+                templeId={service.templeId} 
+              />
             </div>
             <div className="space-y-1">
               <CardTitle className="text-xl font-bold text-white">{service.name || 'Unnamed Service'}</CardTitle>
@@ -258,7 +264,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
           {service.description || 'No description available'}
         </p>
 
-        {/* Date and Time Information */}
+        {/* Date, Time, and Leader Information */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-gray-300">
             <Calendar className="h-4 w-4" />
@@ -272,81 +278,84 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
               {service.timeSlot ? `${service.timeSlot.start} - ${service.timeSlot.end}` : 'Time not set'}
             </span>
           </div>
-        </div>
-
-        {/* Service Leader Selection and Contact Information */}
-        {showManageButtons ? (
-          <div className="space-y-4 p-4 rounded-lg bg-purple-500/10">
-            <h4 className="text-sm font-medium text-purple-300">Service Leader</h4>
-            
-            {/* Optional User Selection */}
-            <div className="space-y-2">
-              <Label className="text-gray-300">Select from Temple Users (Optional)</Label>
-              <Select
-                onValueChange={handleServiceLeaderChange}
-                value={selectedUserId}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a service leader" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None (Manual Entry)</SelectItem>
-                  {templeUsers.map((user) => (
-                    <SelectItem key={user.uid} value={user.uid}>
-                      {user.displayName || user.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Manual Contact Information */}
-            <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label className="text-gray-300">Leader Name</Label>
-                <Input
-                  value={manualContactName}
-                  onChange={(e) => setManualContactName(e.target.value)}
-                  placeholder="Enter leader name"
-                  className="bg-white/5 border-white/10 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-gray-300">Leader Phone</Label>
-                <Input
-                  value={manualContactPhone}
-                  onChange={(e) => setManualContactPhone(e.target.value)}
-                  placeholder="Enter phone number"
-                  className="bg-white/5 border-white/10 text-white"
-                />
-              </div>
-              <Button 
-                onClick={handleContactUpdate}
-                disabled={isLoading}
-                className="w-full"
-              >
-                {isLoading ? 'Updating...' : 'Update Contact Information'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          /* Display Contact Information (when not editing) */
-          service.contactPerson && (
-            <div className="space-y-2 p-4 rounded-lg bg-purple-500/10">
-              <h4 className="text-sm font-medium text-purple-300 mb-2">Service Leader Contact</h4>
+          {service.contactPerson && !isEditingContact ? (
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-gray-300">
                 <User className="h-4 w-4" />
                 <span>{service.contactPerson.name}</span>
+                {service.contactPerson.phone && (
+                  <>
+                    <span className="mx-1">•</span>
+                    <Phone className="h-4 w-4" />
+                    <span>{service.contactPerson.phone}</span>
+                  </>
+                )}
               </div>
-              {service.contactPerson.phone && (
-                <div className="flex items-center gap-2 text-gray-300">
-                  <Phone className="h-4 w-4" />
-                  <span>{service.contactPerson.phone}</span>
-                </div>
+              {showManageButtons && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsEditingContact(true)}
+                  className="hover:bg-purple-500/20"
+                >
+                  <Edit className="h-4 w-4 text-purple-400" />
+                </Button>
               )}
             </div>
-          )
-        )}
+          ) : isEditingContact && (
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Select
+                  onValueChange={handleServiceLeaderChange}
+                  value={selectedUserId}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a service leader" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (Manual Entry)</SelectItem>
+                    {templeUsers.map((user) => (
+                      <SelectItem key={user.uid} value={user.uid}>
+                        {user.displayName || user.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={manualContactName}
+                  onChange={(e) => setManualContactName(e.target.value)}
+                  placeholder="Leader name"
+                  className="bg-white/5 border-white/10 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={manualContactPhone}
+                  onChange={(e) => setManualContactPhone(e.target.value)}
+                  placeholder="Phone number"
+                  className="bg-white/5 border-white/10 text-white"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => setIsEditingContact(false)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleContactUpdate}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Updating...' : 'Update'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Service Notes Section */}
         <div className="space-y-2 p-4 rounded-lg bg-purple-500/10">

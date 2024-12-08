@@ -15,9 +15,15 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { FirebaseError } from '../../firebase-error';
-import { Service, SERVICE_REGISTRATIONS_COLLECTION } from './types';
+import { Service, ServiceUpdate, SERVICE_REGISTRATIONS_COLLECTION } from './types';
 import { withRetry } from './utils';
 import { isTempleAdmin } from '../admin';
+import { getUsersByTemple } from '../users';
+import { createNotification } from '../notifications';
+
+type ServiceInput = Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'currentParticipants' | 'pendingParticipants'> & {
+  date: Date;
+};
 
 export async function createService(
   templeId: string,
@@ -37,7 +43,7 @@ export async function createService(
       phone: string;
       userId?: string;
     };
-    notes?: string;
+    notes?: string | null;
   }
 ): Promise<Service> {
   if (!templeId) {
@@ -54,6 +60,13 @@ export async function createService(
     const servicesRef = collection(db, `temples/${templeId}/services`);
     const serviceRef = doc(servicesRef);
     
+    // Ensure contactPerson.userId is set to the creator's ID
+    const contactPerson = {
+      name: data.contactPerson.name,
+      phone: data.contactPerson.phone,
+      userId
+    };
+    
     const serviceData: Service = {
       id: serviceRef.id,
       templeId,
@@ -65,14 +78,40 @@ export async function createService(
       pendingParticipants: 0,
       date: Timestamp.fromDate(data.date),
       timeSlot: data.timeSlot,
-      contactPerson: data.contactPerson,
-      notes: data.notes,
+      contactPerson,
+      notes: data.notes ?? null,
       createdAt: serverTimestamp() as Timestamp,
       updatedAt: serverTimestamp() as Timestamp,
       createdBy: userId,
     };
 
     await setDoc(serviceRef, serviceData);
+
+    // Create notifications for all temple members
+    try {
+      const templeUsers = await getUsersByTemple(templeId);
+      const formattedDate = data.date.toLocaleDateString();
+      const formattedTime = `${data.timeSlot.start} - ${data.timeSlot.end}`;
+
+      // Create notifications for all temple members except the creator
+      const notificationPromises = templeUsers
+        .filter(user => user.uid !== userId) // Exclude the creator
+        .map(user => createNotification({
+          userId: user.uid,
+          title: 'New Service Available',
+          message: `A new service "${data.name}" has been created for ${formattedDate} at ${formattedTime}`,
+          type: 'info',
+          link: `/temples/${templeId}/services/${serviceRef.id}`,
+          read: false,
+          timestamp: new Date()
+        }));
+
+      await Promise.all(notificationPromises);
+    } catch (error) {
+      console.error('Error creating notifications:', error);
+      // Don't throw the error as the service was created successfully
+    }
+
     return serviceData;
   });
 }
@@ -81,23 +120,7 @@ export async function updateService(
   serviceId: string,
   userId: string,
   templeId: string,
-  data: Partial<{
-    name: string;
-    description: string;
-    type: string;
-    maxParticipants: number;
-    date: Date;
-    timeSlot: {
-      start: string;
-      end: string;
-    };
-    contactPerson: {
-      name: string;
-      phone: string;
-      userId?: string;
-    };
-    notes?: string;
-  }>
+  data: ServiceUpdate
 ): Promise<void> {
   return withRetry(async () => {
     const serviceRef = doc(db, `temples/${templeId}/services`, serviceId);
@@ -121,16 +144,64 @@ export async function updateService(
       throw new FirebaseError('permission-denied', 'Service leaders can only update notes');
     }
 
-    const updateData: any = {
-      ...data,
-      updatedAt: serverTimestamp(),
+    // Create update data without date first
+    const { date, ...restData } = data;
+    
+    const updateData: Partial<Service> = {
+      ...restData,
+      updatedAt: serverTimestamp() as Timestamp,
     };
 
-    if (data.date) {
-      updateData.date = Timestamp.fromDate(data.date);
+    // Add converted date if present
+    if (date) {
+      updateData.date = Timestamp.fromDate(date);
+    }
+
+    // Ensure contactPerson.userId is preserved or set to the current user's ID
+    if (data.contactPerson) {
+      updateData.contactPerson = {
+        ...data.contactPerson,
+        userId: service.contactPerson?.userId || userId
+      };
+    }
+
+    // Handle notes explicitly
+    if ('notes' in data) {
+      updateData.notes = data.notes ?? null;
     }
 
     await updateDoc(serviceRef, updateData);
+
+    // Create notifications for service updates if significant changes were made
+    if (userIsTempleAdmin && (data.date || data.timeSlot || data.name)) {
+      try {
+        const templeUsers = await getUsersByTemple(templeId);
+        const formattedDate = date ? date.toLocaleDateString() : service.date.toDate().toLocaleDateString();
+        const timeSlot = data.timeSlot || service.timeSlot;
+        
+        const changes: string[] = [];
+        if (data.name) changes.push('name');
+        if (data.date) changes.push('date');
+        if (data.timeSlot) changes.push('time');
+
+        const notificationPromises = templeUsers
+          .filter(user => user.uid !== userId) // Exclude the updater
+          .map(user => createNotification({
+            userId: user.uid,
+            title: 'Service Updated',
+            message: `The service "${service.name}" has been updated (${changes.join(', ')}). New schedule: ${formattedDate} at ${timeSlot.start} - ${timeSlot.end}`,
+            type: 'info',
+            link: `/temples/${templeId}/services/${serviceId}`,
+            read: false,
+            timestamp: new Date()
+          }));
+
+        await Promise.all(notificationPromises);
+      } catch (error) {
+        console.error('Error creating update notifications:', error);
+        // Don't throw the error as the service was updated successfully
+      }
+    }
   });
 }
 
@@ -156,6 +227,8 @@ export async function deleteService(serviceId: string, userId: string, templeId:
         console.log('[deleteService] Service not found');
         throw new FirebaseError('not-found', 'Service not found');
       }
+
+      const service = serviceDoc.data() as Service;
       
       // Check for registrations if not force deleting
       if (!force) {
@@ -179,7 +252,7 @@ export async function deleteService(serviceId: string, userId: string, templeId:
         const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
         const q = query(registrationsRef, 
           where('serviceId', '==', serviceId),
-          where('templeId', '==', templeId)  // Add templeId check to ensure we only get registrations for this temple
+          where('templeId', '==', templeId)
         );
         const registrationsSnapshot = await getDocs(q);
         
@@ -201,6 +274,29 @@ export async function deleteService(serviceId: string, userId: string, templeId:
         // Commit the batch
         await batch.commit();
         console.log('[deleteService] Batch committed successfully');
+      }
+
+      // Create notifications for service deletion
+      try {
+        const templeUsers = await getUsersByTemple(templeId);
+        const formattedDate = service.date.toDate().toLocaleDateString();
+        const timeSlot = service.timeSlot;
+
+        const notificationPromises = templeUsers
+          .filter(user => user.uid !== userId) // Exclude the deleter
+          .map(user => createNotification({
+            userId: user.uid,
+            title: 'Service Cancelled',
+            message: `The service "${service.name}" scheduled for ${formattedDate} at ${timeSlot.start} - ${timeSlot.end} has been cancelled.`,
+            type: 'warning',
+            read: false,
+            timestamp: new Date()
+          }));
+
+        await Promise.all(notificationPromises);
+      } catch (error) {
+        console.error('Error creating deletion notifications:', error);
+        // Don't throw the error as the service was deleted successfully
       }
       
       console.log('[deleteService] Delete completed successfully');

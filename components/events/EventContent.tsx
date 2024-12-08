@@ -1,20 +1,96 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { Event } from '@/lib/db/events/types';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, MapPin, Users, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from '@/components/ui/use-toast';
+import { registerForEvent, unregisterFromEvent } from '@/lib/db/events/registrations';
+import { useFirebaseAuth } from '@/lib/hooks/useFirebaseAuth';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useEffect } from 'react';
+import { getAuth } from 'firebase/auth';
 
 interface EventContentProps {
   event: Event;
   templeId: string;
 }
 
-export function EventContent({ event, templeId }: EventContentProps) {
+export function EventContent({ event: initialEvent, templeId }: EventContentProps) {
   const router = useRouter();
+  const { toast } = useToast();
+  const { user } = useFirebaseAuth();
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [event, setEvent] = useState(initialEvent);
+
+  // Subscribe to real-time updates
+  useEffect(() => {
+    const eventRef = doc(db, `temples/${templeId}/events`, event.id);
+    const unsubscribe = onSnapshot(eventRef, (doc) => {
+      if (doc.exists()) {
+        setEvent({ ...doc.data(), id: doc.id } as Event);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [templeId, event.id]);
+
+  const isRegistered = event.participants?.some(p => p.userId === user?.uid);
+  const participantCount = event.participants?.length || 0;
+
+  const handleRegistration = useCallback(async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to register for events",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsRegistering(true);
+    try {
+      if (isRegistered) {
+        await unregisterFromEvent(templeId, event.id, user.uid);
+        toast({
+          title: "Unregistered",
+          description: "You have been unregistered from the event"
+        });
+      } else {
+        // Get current user from Firebase Auth
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        
+        if (!currentUser) {
+          throw new Error('User not authenticated');
+        }
+
+        await registerForEvent(templeId, event.id, user.uid, {
+          photoURL: currentUser.photoURL || undefined,
+          displayName: currentUser.displayName || undefined
+        });
+        toast({
+          title: "Registered",
+          description: "You have been registered for the event"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsRegistering(false);
+    }
+  }, [event.id, isRegistered, templeId, toast, user]);
 
   return (
-    <div className="container mx-auto py-6 content-fade-in">
+    <div className="container mx-auto p-4 content-fade-in">
       {/* Back Button */}
       <Button
         variant="ghost"
@@ -68,12 +144,13 @@ export function EventContent({ event, templeId }: EventContentProps) {
                     <MapPin className="mr-3 h-5 w-5" />
                     <span>{event.location}</span>
                   </div>
-                  {event.capacity && (
-                    <div className="flex items-center text-muted-foreground">
-                      <Users className="mr-3 h-5 w-5" />
-                      <span>Capacity: {event.capacity} people</span>
-                    </div>
-                  )}
+                  <div className="flex items-center text-muted-foreground">
+                    <Users className="mr-3 h-5 w-5" />
+                    <span>
+                      {participantCount} participant{participantCount !== 1 ? 's' : ''}
+                      {event.capacity ? ` / ${event.capacity}` : ''}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -81,9 +158,40 @@ export function EventContent({ event, templeId }: EventContentProps) {
                 <Button 
                   size="lg" 
                   className="w-full transition-all duration-300 hover:scale-[1.02]"
+                  onClick={handleRegistration}
+                  disabled={isRegistering}
                 >
-                  Register for Event
+                  {isRegistering ? 'Processing...' : isRegistered ? 'Cancel Registration' : 'Register for Event'}
                 </Button>
+              )}
+
+              {/* Participants Section */}
+              {event.participants && event.participants.length > 0 && (
+                <div className="p-6 rounded-lg bg-muted/50">
+                  <h3 className="text-lg font-semibold mb-4">Participants</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <TooltipProvider>
+                      {event.participants.map((participant) => (
+                        <Tooltip key={participant.userId}>
+                          <TooltipTrigger>
+                            <Avatar className="h-10 w-10">
+                              {participant.photoURL ? (
+                                <AvatarImage src={participant.photoURL} alt={participant.displayName || 'Participant'} />
+                              ) : (
+                                <AvatarFallback>
+                                  {participant.displayName?.[0] || 'U'}
+                                </AvatarFallback>
+                              )}
+                            </Avatar>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{participant.displayName || 'Anonymous User'}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </TooltipProvider>
+                  </div>
+                </div>
               )}
             </div>
 

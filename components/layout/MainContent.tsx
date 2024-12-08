@@ -41,7 +41,7 @@ export function MainContent({ children }: { children: React.ReactNode }) {
       
       <main className={`
         flex-1 
-        ${isAuthPage ? '' : isHomePage ? 'min-h-[calc(100vh-3.5rem)]' : 'px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6'}
+        ${isAuthPage ? '' : isHomePage ? 'min-h-[calc(100vh-3.5rem)]' : 'px-0 sm:px-4 md:px-6 py-2 sm:py-4 md:py-6'}
       `}>
         {children}
       </main>
