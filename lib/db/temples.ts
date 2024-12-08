@@ -27,6 +27,14 @@ export interface DailyProgram {
   activity: string;
 }
 
+export interface TempleNews {
+  title: string;
+  content: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  expiresAt?: Timestamp;
+}
+
 export type TempleProgram = Record<DayOfWeek, DailyProgram[]>;
 
 export interface Temple {
@@ -37,6 +45,7 @@ export interface Temple {
   aboutImageUrl?: string;
   logoUrl?: string;
   dailyPrograms?: TempleProgram;
+  news?: TempleNews;
   socialMedia?: {
     instagram?: string;
     facebook?: string;
@@ -92,6 +101,7 @@ export async function createTemple(
         saturday: [],
         sunday: []
       },
+      news: data.news,
       socialMedia: data.socialMedia || {},
       createdAt: serverTimestamp() as Timestamp,
       updatedAt: serverTimestamp() as Timestamp,
@@ -107,6 +117,26 @@ export async function createTemple(
   } catch (error) {
     console.error('Error creating temple:', error);
     throw new FirebaseError('unknown', 'Failed to create temple');
+  }
+}
+
+export async function updateTempleNews(
+  templeId: string,
+  news: Omit<TempleNews, 'createdAt' | 'updatedAt'>
+): Promise<void> {
+  try {
+    const templeRef = doc(db, TEMPLES_COLLECTION, templeId);
+    await setDoc(templeRef, {
+      news: {
+        ...news,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error updating temple news:', error);
+    throw new FirebaseError('unknown', 'Failed to update temple news');
   }
 }
 

@@ -18,7 +18,8 @@ import {
   Settings,
   FileText,
   Bell,
-  ChevronRight
+  ChevronRight,
+  Newspaper
 } from 'lucide-react';
 import { 
   ServiceRegistration, 
@@ -29,7 +30,7 @@ import {
 import { isAdmin } from '@/lib/db/admin';
 
 interface EnrichedRegistration extends ServiceRegistration {
-  service?: Service;
+  service: Service;
 }
 
 function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
@@ -69,31 +70,34 @@ function DashboardContent() {
           userRegistrations.map(async (reg) => {
             try {
               const service = await getService(reg.serviceId, reg.templeId);
-              return { ...reg, service };
+              return { ...reg, service } as EnrichedRegistration;
             } catch (error) {
               console.error(`Error loading service ${reg.serviceId}:`, error);
-              // Return registration with a placeholder service object for deleted services
-              return { 
-                ...reg, 
-                service: {
-                  id: reg.serviceId,
-                  templeId: reg.templeId,
-                  name: '[Deleted Service]',
-                  description: 'This service is no longer available',
-                  type: 'unknown',
-                  maxParticipants: 0,
-                  currentParticipants: 0,
-                  pendingParticipants: 0,
-                  date: reg.createdAt, // Use registration date as fallback
-                  timeSlot: {
-                    start: '00:00',
-                    end: '00:00'
-                  },
-                  createdAt: reg.createdAt,
-                  updatedAt: reg.updatedAt,
-                  createdBy: ''
-                }
+              // Create a fallback service object for deleted services
+              const fallbackService: Service = {
+                id: reg.serviceId,
+                templeId: reg.templeId,
+                name: '[Deleted Service]',
+                description: 'This service is no longer available',
+                type: 'unknown',
+                maxParticipants: 0,
+                currentParticipants: 0,
+                pendingParticipants: 0,
+                date: reg.createdAt,
+                timeSlot: {
+                  start: '00:00',
+                  end: '00:00'
+                },
+                contactPerson: {
+                  name: 'Unknown',
+                  phone: 'N/A',
+                  userId: undefined
+                },
+                createdAt: reg.createdAt,
+                updatedAt: reg.updatedAt,
+                createdBy: ''
               };
+              return { ...reg, service: fallbackService } as EnrichedRegistration;
             }
           })
         );
@@ -168,6 +172,11 @@ function DashboardContent() {
               <div>
                 <div className="text-2xl font-bold">{profile?.displayName ?? 'Anonymous'}</div>
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Member since: {profile?.createdAt && 'toDate' in profile.createdAt ? 
+                    profile.createdAt.toDate().toLocaleDateString() : 
+                    'N/A'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -188,16 +197,25 @@ function DashboardContent() {
 
         <Card className="group transition-all duration-300 hover:shadow-lg dark:hover:shadow-primary/10">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Member Since</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground transition-transform group-hover:scale-110" />
+            <CardTitle className="text-sm font-medium">Temple News</CardTitle>
+            <Newspaper className="h-4 w-4 text-muted-foreground transition-transform group-hover:scale-110" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {profile?.createdAt && 'toDate' in profile.createdAt ? 
-                profile.createdAt.toDate().toLocaleDateString() : 
-                'N/A'}
-            </div>
-            <p className="text-xs text-muted-foreground">Account creation date</p>
+            {currentTemple?.news ? (
+              <div>
+                <h3 className="text-lg font-semibold">{currentTemple.news.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                  {currentTemple.news.content}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Updated: {currentTemple.news.updatedAt.toDate().toLocaleDateString()}
+                </p>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No current news from your temple
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -57,7 +57,8 @@ const formSchema = z.object({
   }),
   contactPerson: z.object({
     name: z.string().min(2, 'Contact person name must be at least 2 characters'),
-    phone: z.string().regex(/^\+?[0-9\s-()]{8,}$/, 'Please enter a valid phone number')
+    phone: z.string().regex(/^\+?[0-9\s-()]{8,}$/, 'Please enter a valid phone number'),
+    userId: z.string().optional() // Make userId optional to allow external contacts
   })
 });
 
@@ -95,7 +96,8 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
       },
       contactPerson: service?.contactPerson || {
         name: '',
-        phone: ''
+        phone: '',
+        userId: undefined // Allow undefined for external contacts
       }
     },
   });
@@ -268,6 +270,9 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
 
           <div className="space-y-4 p-4 rounded-lg bg-muted">
             <h3 className="font-medium">Service Leader Contact</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Enter the contact details for the service leader. They don't need to be registered in the app.
+            </p>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

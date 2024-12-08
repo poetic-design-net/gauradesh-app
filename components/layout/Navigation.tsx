@@ -157,16 +157,16 @@ export function Navigation({ onNavigate }: NavigationProps) {
           ) : currentTemple && (
             <>
               <NavigationLink
-                icon={Home}
-                label="About Temple"
-                onClick={() => handleNavigation(`/temples/${currentTemple.id}/about`)}
+                icon={Calendar}
+                label="Events"
+                onClick={() => handleNavigation(`/temples/${currentTemple.id}/events`)}
                 className="text-primary hover:text-primary/90"
                 showLabel={isExpanded}
               />
               <NavigationLink
-                icon={Calendar}
-                label="Events"
-                onClick={() => handleNavigation(`/temples/${currentTemple.id}/events`)}
+                icon={Home}
+                label="About Temple"
+                onClick={() => handleNavigation(`/temples/${currentTemple.id}/about`)}
                 className="text-primary hover:text-primary/90"
                 showLabel={isExpanded}
               />

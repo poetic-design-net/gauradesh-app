@@ -1,19 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from "@/contexts/AuthContext";
-import { getTemple, Temple, updateTemple } from "@/lib/db/temples";
-import { TempleAboutForm } from "@/components/admin/TempleAboutForm";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from '@/contexts/AuthContext';
+import { getTemple, Temple, updateTemple } from '@/lib/db/temples';
+import { TempleAboutForm } from '@/components/admin/TempleAboutForm';
+import { NewsForm } from '@/components/admin/NewsForm';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from "@/lib/firebase";
-import { AdminData, ADMIN_COLLECTION } from "@/lib/db/admin";
+import { db } from '@/lib/firebase';
+import { AdminData, ADMIN_COLLECTION } from '@/lib/db/admin';
 import { useRouter } from 'next/navigation';
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { ImageUpload } from "@/components/ui/image-upload";
-import { useToast } from "@/components/ui/use-toast";
+import { ImageUpload } from '@/components/ui/image-upload';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function AdminSettingsPage() {
   const { user } = useAuth();
@@ -128,6 +129,14 @@ export default function AdminSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <NewsForm 
+        temple={temple} 
+        onSuccess={() => {
+          // Reload temple data after successful update
+          getTemple(temple.id).then(setTemple);
+        }}
+      />
 
       <TempleAboutForm 
         temple={temple} 

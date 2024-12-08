@@ -39,6 +39,16 @@ service cloud.firestore {
         serviceData.contactPerson.userId == request.auth.uid;
     }
 
+    function isValidNews(news) {
+      return news.keys().hasAll(['title', 'content', 'createdAt', 'updatedAt']) &&
+        news.keys().hasOnly(['title', 'content', 'createdAt', 'updatedAt', 'expiresAt']) &&
+        news.title is string &&
+        news.content is string &&
+        news.createdAt is timestamp &&
+        news.updatedAt is timestamp &&
+        (news.expiresAt == null || news.expiresAt is timestamp);
+    }
+
     // Root admin collection
     match /admin/{adminId} {
       allow read: if isAuthenticated();
@@ -131,17 +141,20 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly([
           'name', 'description', 'aboutImageUrl', 'logoUrl', 'address',
           'phone', 'email', 'website', 'dailyPrograms', 'socialMedia',
-          'createdAt', 'updatedAt'
-        ]);
+          'news', 'createdAt', 'updatedAt'
+        ]) &&
+        (request.resource.data.news == null || isValidNews(request.resource.data.news));
       allow update: if isAuthenticated() && (
         (isTempleAdmin(templeId) && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['description', 'aboutImageUrl', 'logoUrl', 'phone', 'email', 'website', 
-                   'dailyPrograms', 'socialMedia', 'updatedAt'])) ||
+                   'dailyPrograms', 'socialMedia', 'news', 'updatedAt']) &&
+          (request.resource.data.news == null || isValidNews(request.resource.data.news))) ||
         (isSuperAdmin() && request.resource.data.keys().hasOnly([
           'name', 'description', 'aboutImageUrl', 'logoUrl', 'address',
           'phone', 'email', 'website', 'dailyPrograms', 'socialMedia',
-          'createdAt', 'updatedAt'
-        ]))
+          'news', 'createdAt', 'updatedAt'
+        ]) &&
+        (request.resource.data.news == null || isValidNews(request.resource.data.news)))
       );
       allow delete: if isAuthenticated() && isSuperAdmin();
 
