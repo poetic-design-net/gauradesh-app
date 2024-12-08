@@ -1,41 +1,52 @@
 'use client';
 
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useEffect, useState } from 'react';
-import { AuthForm } from '@/components/auth/AuthForm';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { AuthForm } from '../components/auth/AuthForm';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
 import { useRouter } from 'next/navigation';
 import { HeartHandshake, FileText, ArrowRight, Bell, Calendar, User, MessageSquare } from 'lucide-react';
-import { getUserProfile, type UserProfile } from '@/lib/db/users';
-import { useTempleContext } from '@/contexts/TempleContext';
+import { getUserProfile, type UserProfile } from '../lib/db/users';
+import { useTempleContext } from '../contexts/TempleContext';
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, initialized } = useAuth();
   const { currentTemple } = useTempleContext();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
       if (user) {
         try {
+          setProfileLoading(true);
           const userProfile = await getUserProfile(user.uid);
           setProfile(userProfile);
         } catch (error) {
           console.error('Error loading profile:', error);
+        } finally {
+          setProfileLoading(false);
         }
       }
     }
 
-    loadProfile();
-  }, [user]);
+    if (user && !profile) {
+      loadProfile();
+    }
+  }, [user, profile]);
+
+  // Don't render anything until auth is initialized
+  if (!initialized) {
+    return null;
+  }
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative overflow-auto">
       {/* Animated Background with Parallax Effect */}
       <div 
-        className="absolute inset-0 bg-cover bg-center bg-fixed bg-no-repeat transition-transform duration-1000 hover:scale-105"
+        className="fixed inset-0 bg-cover bg-center bg-fixed bg-no-repeat transition-transform duration-1000 hover:scale-105"
         style={{ 
           backgroundImage: 'url("https://s3-ap-southeast-1.amazonaws.com/images.brajrasik.org/66407fbea13f2d00091c9a30.jpeg")',
         }}
@@ -44,7 +55,7 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="relative flex flex-col items-center justify-center min-h-screen p-4 animate-fadeIn">
+      <div className="relative min-h-screen py-8 md:py-12 px-4 flex items-center justify-center">
         {user ? (
           // Authenticated State
           <div className="text-center space-y-8 w-full max-w-4xl mx-auto">
@@ -147,9 +158,6 @@ export default function Home() {
                 </div>
               </Card>
             </div>
-
-            {/* Decorative Elements */}
-            <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
           </div>
         ) : (
           // Non-authenticated State
@@ -167,7 +175,7 @@ export default function Home() {
             </div>
             
             {/* Enhanced Auth Form Container */}
-            <div className="backdrop-blur-lg bg-white/10 p-6 rounded-lg border border-white/20 shadow-2xl">
+            <div className="backdrop-blur-lg bg-white/10 rounded-lg border border-white/20 shadow-2xl">
               <AuthForm />
             </div>
 

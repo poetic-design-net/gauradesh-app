@@ -43,10 +43,10 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 type SignInValues = z.infer<typeof signInSchema>;
 
 export function AuthForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [temples, setTemples] = useState<Temple[]>([]);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const form = useForm<SignUpValues | SignInValues>({
@@ -94,8 +94,8 @@ export function AuthForm() {
   }, [isSignUp, toast]);
 
   async function onSubmit(values: SignUpValues | SignInValues) {
-    if (isLoading) return; // Prevent multiple submissions
-    setIsLoading(true);
+    if (formLoading || authLoading) return; // Prevent multiple submissions
+    setFormLoading(true);
     
     try {
       if (isSignUp) {
@@ -151,12 +151,14 @@ export function AuthForm() {
         description: errorMessage,
       });
     } finally {
-      setIsLoading(false);
+      setFormLoading(false);
     }
   }
 
+  const isLoading = formLoading || authLoading;
+
   return (
-    <Card className="w-full max-w-md mx-auto bg-black/40 backdrop-blur-md border-white/20 my-4">
+    <div className="w-full">
       <CardHeader className="space-y-2 pt-6">
         <CardTitle className="text-xl text-white text-center">
           {isSignUp ? 'Create Account' : 'Sign In'}
@@ -279,6 +281,6 @@ export function AuthForm() {
           </Button>
         </div>
       </CardContent>
-    </Card>
+    </div>
   );
 }

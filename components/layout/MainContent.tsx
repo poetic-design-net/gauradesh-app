@@ -2,12 +2,13 @@
 
 import { Suspense } from 'react';
 import { Header } from './Header';
-import { useNavigation } from '@/contexts/NavigationContext';
+import { useNavigation } from '../../contexts/NavigationContext';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '../../contexts/AuthContext';
 
 function PageLoading() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
       <div className="animate-pulse space-y-4 w-full max-w-md">
         <div className="h-8 bg-muted rounded w-3/4"></div>
         <div className="space-y-2">
@@ -22,8 +23,10 @@ function PageLoading() {
 
 export function MainContent({ children }: { children: React.ReactNode }) {
   const { isExpanded } = useNavigation();
+  const { user } = useAuth();
   const pathname = usePathname();
   const isHomePage = pathname === '/';
+  const isAuthPage = isHomePage && !user;
   
   return (
     <div 
@@ -31,20 +34,16 @@ export function MainContent({ children }: { children: React.ReactNode }) {
         relative
         transition-all duration-300 ease-in-out
         ${isExpanded ? 'md:ml-[280px]' : 'md:ml-16'}
-        ${isHomePage ? 'h-screen overflow-hidden' : ''}
+        ${!isAuthPage ? 'min-h-screen' : ''}
       `}
     >
       <Header />
       
       <main className={`
         flex-1 
-        ${isHomePage ? 'h-[calc(100vh-3.5rem)]' : 'px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6'}
+        ${isAuthPage ? '' : isHomePage ? 'min-h-[calc(100vh-3.5rem)]' : 'px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6'}
       `}>
-        <Suspense fallback={<PageLoading />}>
-          <div className={`w-full ${isHomePage ? '' : 'max-w-[95%] md:max-w-7xl mx-auto'}`}>
-            {children}
-          </div>
-        </Suspense>
+        {children}
       </main>
     </div>
   );

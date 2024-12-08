@@ -116,6 +116,7 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
 
       toast({
         title: 'Success',
+        variant: 'success',
         description: 'Temple about page has been updated',
       });
 

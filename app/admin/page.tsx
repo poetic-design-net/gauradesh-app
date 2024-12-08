@@ -3,12 +3,27 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { AdminDashboardSkeleton } from '@/components/admin/AdminDashboardSkeleton';
+import { AdminHeader } from '@/components/admin/AdminHeader';
+import { EventsTable } from '@/components/admin/EventsTable';
+import { ServicesTable } from '@/components/admin/ServicesTable';
+import { RegistrationsTable } from '@/components/admin/RegistrationsTable';
 import { ServiceForm } from '@/components/admin/ServiceForm';
 import { ServiceTypeForm } from '@/components/admin/ServiceTypeForm';
-import { AdminDashboardSkeleton } from '@/components/admin/AdminDashboardSkeleton';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Loader2 } from 'lucide-react';
+
 import { 
   getAllServices, 
   getTempleServiceRegistrations,
@@ -24,63 +39,12 @@ import {
 } from '@/lib/db/services';
 import { getTempleEvents, deleteEvent } from '@/lib/db/events/events';
 import { Event } from '@/lib/db/events/types';
-import { getUserProfile, UserProfile } from '@/lib/db/users';
-import { useToast } from '@/components/ui/use-toast';
-import { Plus, Trash2, RefreshCw, Loader2, Check, X, Clock } from 'lucide-react';
+import { getUserProfile, type UserProfile } from '@/lib/db/users';
 import { type AdminData } from '@/lib/db/admin';
-import { formatFirebaseTimestamp } from '@/lib/utils';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import Link from 'next/link';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 
 const ADMIN_COLLECTION = 'admin';
-
-const getStatusBadge = (status: ServiceRegistration['status']) => {
-  switch (status) {
-    case 'approved':
-      return (
-        <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 w-24 justify-center">
-          <Check className="w-3 h-3" />
-          Approved
-        </Badge>
-      );
-    case 'rejected':
-      return (
-        <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 flex items-center gap-1 w-24 justify-center">
-          <X className="w-3 h-3" />
-          Rejected
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 flex items-center gap-1 w-24 justify-center">
-          <Clock className="w-3 h-3" />
-          Pending
-        </Badge>
-      );
-  }
-};
-
-const getStatusColor = (status: ServiceRegistration['status']) => {
-  switch (status) {
-    case 'approved':
-      return 'bg-green-50 text-green-800 dark:bg-green-900/10 dark:text-green-100';
-    case 'rejected':
-      return 'bg-red-50 text-red-800 dark:bg-red-900/10 dark:text-red-100';
-    default:
-      return 'bg-yellow-50 text-yellow-800 dark:bg-yellow-900/10 dark:text-yellow-100';
-  }
-};
 
 async function getAdminData(uid: string): Promise<AdminData | null> {
   if (!uid) return null;
@@ -260,7 +224,10 @@ export default function AdminDashboard() {
         adminData.templeId,
         registration.serviceId
       );
-      toast({ description: 'Status updated successfully' });
+      toast({ 
+        variant: 'success',
+        description: 'Status updated successfully' 
+      });
       await loadRegistrations(adminData);
     } catch (error: any) {
       toast({
@@ -278,7 +245,10 @@ export default function AdminDashboard() {
     try {
       setActionLoading(true);
       await deleteRegistration(registrationId, user.uid);
-      toast({ description: 'Registration deleted successfully' });
+      toast({ 
+        variant: 'success',
+        description: 'Registration deleted successfully' 
+      });
       await loadRegistrations(adminData);
     } catch (error: any) {
       toast({
@@ -318,7 +288,10 @@ export default function AdminDashboard() {
     try {
       setActionLoading(true);
       await deleteService(deletingService.id, user.uid, adminData.templeId, true);
-      toast({ description: 'Service deleted successfully' });
+      toast({ 
+        variant: 'success',
+        description: 'Service deleted successfully' 
+      });
       await loadServices(adminData);
     } catch (error: any) {
       toast({
@@ -337,7 +310,10 @@ export default function AdminDashboard() {
     try {
       setActionLoading(true);
       await deleteEvent(adminData.templeId, deletingEvent.id);
-      toast({ description: 'Event deleted successfully' });
+      toast({ 
+        variant: 'success',
+        description: 'Event deleted successfully' 
+      });
       await loadEvents(adminData);
     } catch (error: any) {
       toast({
@@ -349,7 +325,7 @@ export default function AdminDashboard() {
       setDeletingEvent(null);
     }
   };
-
+  
   if (authLoading || !adminData) {
     return <AdminDashboardSkeleton />;
   }
@@ -365,48 +341,13 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-4 space-y-6">
-      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
-        <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-        <div className="flex flex-wrap gap-2">
-          <Button 
-            onClick={loadData} 
-            variant="outline" 
-            className="w-full sm:w-auto"
-            disabled={actionLoading}
-          >
-            {actionLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Refresh
-          </Button>
-          <Button 
-            onClick={() => setShowTypeForm(true)} 
-            className="w-full sm:w-auto"
-            disabled={actionLoading}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Service Type
-          </Button>
-          <Button 
-            onClick={() => setShowServiceForm(true)} 
-            className="w-full sm:w-auto"
-            disabled={actionLoading}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Service
-          </Button>
-          {adminData?.templeId && (
-            <Link href={`/temples/${adminData.templeId}/events/create`} className="w-full sm:w-auto">
-              <Button className="w-full" disabled={actionLoading}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Event
-              </Button>
-            </Link>
-          )}
-        </div>
-      </div>
+      <AdminHeader
+        onRefresh={loadData}
+        onAddServiceType={() => setShowTypeForm(true)}
+        onAddService={() => setShowServiceForm(true)}
+        templeId={adminData?.templeId}
+        isLoading={actionLoading}
+      />
 
       {showServiceForm && (
         <ServiceForm 
@@ -431,286 +372,25 @@ export default function AdminDashboard() {
         />
       )}
 
-      <Card className="shadow-lg">
-        <CardHeader className="border-b">
-          <CardTitle>Events</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {loadingEvents ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <div className="h-4 w-[250px] bg-muted animate-pulse rounded" />
-                    <div className="h-3 w-[200px] bg-muted animate-pulse rounded" />
-                  </div>
-                  <div className="h-8 w-[100px] bg-muted animate-pulse rounded" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <div className="inline-block min-w-full align-middle">
-                <div className="overflow-hidden rounded-lg border">
-                  <table className="min-w-full divide-y divide-border">
-                    <thead>
-                      <tr className="bg-muted/50">
-                        <th className="px-4 py-3 text-left text-sm font-medium">Title</th>
-                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Location</th>
-                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Start Date</th>
-                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">End Date</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Capacity</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {events.map((event) => (
-                        <tr key={event.id} className="hover:bg-muted/50">
-<td className="px-4 py-3 text-sm">
-                            <div className="font-medium">{event.title}</div>
-                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
-                              {event.location}<br />
-                              {event.startDate.toDate().toLocaleString()}
-                            </div>
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">{event.location}</td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                            {event.startDate.toDate().toLocaleString()}
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                            {event.endDate.toDate().toLocaleString()}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <Badge variant="secondary">
-                              {event.capacity || 'Unlimited'}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right">
-                            <div className="flex justify-end gap-2">
-                              <Link href={`/temples/${adminData?.templeId}/events/${event.id}/edit`}>
-                                <Button size="sm" variant="outline" disabled={actionLoading}>
-                                  Edit
-                                </Button>
-                              </Link>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteEvent(event)}
-                                disabled={actionLoading}
-                              >
-                                {actionLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <EventsTable
+        events={events}
+        onDeleteEvent={handleDeleteEvent}
+        isLoading={actionLoading}
+      />
 
-      <Card className="shadow-lg">
-        <CardHeader className="border-b">
-          <CardTitle>Services</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {loadingServices ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <div className="h-4 w-[250px] bg-muted animate-pulse rounded" />
-                    <div className="h-3 w-[200px] bg-muted animate-pulse rounded" />
-                  </div>
-                  <div className="h-8 w-[100px] bg-muted animate-pulse rounded" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <div className="inline-block min-w-full align-middle">
-                <div className="overflow-hidden rounded-lg border">
-                  <table className="min-w-full divide-y divide-border">
-                    <thead>
-                      <tr className="bg-muted/50">
-                        <th className="px-4 py-3 text-left text-sm font-medium">Name</th>
-                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Type</th>
-                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Date</th>
-                        <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Time</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Participants</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {services.map((service) => (
-                        <tr key={service.id} className="hover:bg-muted/50">
-                          <td className="px-4 py-3 text-sm">
-                            <div className="font-medium">{service.name}</div>
-                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
-                              {service.type}<br />
-                              {formatFirebaseTimestamp(service.date)}<br />
-                              {service.timeSlot.start} - {service.timeSlot.end}
-                            </div>
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                            <Badge variant="outline">{service.type}</Badge>
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                            {formatFirebaseTimestamp(service.date)}
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                            {service.timeSlot.start} - {service.timeSlot.end}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <Badge variant="secondary">
-                              {service.currentParticipants}/{service.maxParticipants}
-                            </Badge>
-                            {service.pendingParticipants > 0 && (
-                              <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100">
-                                {service.pendingParticipants} pending
-                              </Badge>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteService(service)}
-                              disabled={actionLoading}
-                              className="ml-auto"
-                            >
-                              {actionLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ServicesTable
+        services={services}
+        onDeleteService={handleDeleteService}
+        isLoading={actionLoading}
+      />
 
       {adminData?.templeId && (
-        <Card className="shadow-lg">
-          <CardHeader className="border-b">
-            <CardTitle>Registrations</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            {loadingRegistrations ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <div className="h-4 w-[250px] bg-muted animate-pulse rounded" />
-                      <div className="h-3 w-[200px] bg-muted animate-pulse rounded" />
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="h-8 w-[100px] bg-muted animate-pulse rounded" />
-                      <div className="h-8 w-[40px] bg-muted animate-pulse rounded" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <div className="inline-block min-w-full align-middle">
-                  <div className="overflow-hidden rounded-lg border">
-                    <table className="min-w-full divide-y divide-border">
-                      <thead>
-                        <tr className="bg-muted/50">
-                          <th className="px-4 py-3 text-left text-sm font-medium">Service</th>
-                          <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">User</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                          <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Date</th>
-                          <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Message</th>
-                          <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {registrations.map((reg) => (
-                          <tr key={reg.id} className="hover:bg-muted/50">
-                            <td className="px-4 py-3 text-sm">
-                              <div className="font-medium">{reg.serviceName}</div>
-                              <div className="sm:hidden text-xs text-muted-foreground mt-1">
-                                {reg.user?.email}<br />
-                                {formatFirebaseTimestamp(reg.createdAt)}
-                                {reg.message && (
-                                  <>
-                                    <br />
-                                    <span className="italic">"{reg.message}"</span>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                            <td className="hidden sm:table-cell px-4 py-3 text-sm">{reg.user?.email}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <select
-                                value={reg.status}
-                                onChange={(e) => handleStatusUpdate(reg.id, e.target.value as ServiceRegistration['status'])}
-                                className={`w-full sm:w-auto rounded-md border p-2 ${getStatusColor(reg.status)} transition-colors duration-200 cursor-pointer hover:opacity-90 focus:ring-2 focus:ring-offset-2 ${
-                                  reg.status === 'approved' 
-                                    ? 'focus:ring-green-500 hover:bg-green-200 dark:hover:bg-green-900/20' 
-                                    : reg.status === 'rejected'
-                                    ? 'focus:ring-red-500 hover:bg-red-200 dark:hover:bg-red-900/20'
-                                    : 'focus:ring-yellow-500 hover:bg-yellow-200 dark:hover:bg-yellow-900/20'
-                                }`}
-                                disabled={actionLoading}
-                              >
-                                <option value="pending" className="bg-white dark:bg-gray-800">Change to Pending</option>
-                                <option value="approved" className="bg-white dark:bg-gray-800">Change to Approved</option>
-                                <option value="rejected" className="bg-white dark:bg-gray-800">Change to Rejected</option>
-                              </select>
-                            </td>
-                            <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                              {formatFirebaseTimestamp(reg.createdAt)}
-                            </td>
-                            <td className="hidden sm:table-cell px-4 py-3 text-sm">
-                              {reg.message ? (
-                                <span className="italic text-gray-600">"{reg.message}"</span>
-                              ) : (
-                                <span className="text-gray-400">No message</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteRegistration(reg.id)}
-                                disabled={actionLoading}
-                                className="ml-auto"
-                              >
-                                {actionLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <RegistrationsTable
+          registrations={registrations}
+          onStatusUpdate={handleStatusUpdate}
+          onDeleteRegistration={handleDeleteRegistration}
+          isLoading={actionLoading}
+        />
       )}
 
       <AlertDialog open={deletingService !== null} onOpenChange={() => setDeletingService(null)}>

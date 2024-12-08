@@ -32,24 +32,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user?.uid ?? 'No user');
-      setUser(user);
+    console.log('AuthProvider mounted, setting up auth listener...');
+    let unsubscribe: () => void;
+
+    try {
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        console.log('Auth state changed:', user ? `User ${user.uid}` : 'No user');
+        setUser(user);
+        setLoading(false);
+        setInitialized(true);
+      }, (error) => {
+        console.error('Auth state change error:', error);
+        setLoading(false);
+        setInitialized(true);
+      });
+
+      // Fallback timeout to prevent infinite loading
+      const timeout = setTimeout(() => {
+        console.log('Auth initialization timeout reached');
+        setLoading(false);
+        setInitialized(true);
+      }, 5000);
+
+      return () => {
+        console.log('Cleaning up auth listener...');
+        unsubscribe?.();
+        clearTimeout(timeout);
+      };
+    } catch (error) {
+      console.error('Error setting up auth listener:', error);
       setLoading(false);
       setInitialized(true);
-    });
-
-    return () => unsubscribe();
+      return () => {};
+    }
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
+      console.log('Attempting sign in...');
       await signInWithEmailAndPassword(auth, email, password);
-      
-      // Wait a bit for auth state to update
-      await new Promise(resolve => setTimeout(resolve, 500));
       router.push('/dashboard');
+    } catch (error) {
+      console.error('Sign in error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -59,18 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let createdUser: User | null = null;
     try {
       setLoading(true);
+      console.log('Creating new user...');
       
-      // Create Firebase Auth user
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
       createdUser = user;
       
-      // Update display name
+      console.log('Updating user profile...');
       await updateProfile(user, { displayName });
       
-      // Wait for a short time to ensure auth state is updated
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Create user profile with retry logic
+      console.log('Creating user profile...');
       let retries = 3;
       let lastError: any = null;
       
@@ -87,25 +110,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isSuperAdmin: false,
           });
           console.log('Profile created successfully');
-          
-          // Wait a bit for Firestore to update
-          await new Promise(resolve => setTimeout(resolve, 500));
           router.push('/dashboard');
-          
-          return; // Success, exit the function
+          return;
         } catch (error) {
           console.error(`Failed to create profile, retries left: ${retries}`, error);
           lastError = error;
           retries--;
           if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
       }
       
-      // If we get here, all retries failed
       if (lastError) {
-        // Clean up the auth user since profile creation failed
         if (createdUser) {
           try {
             await deleteUser(createdUser);
@@ -117,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
     } catch (error) {
-      // If any error occurred and we created a user, clean it up
+      console.error('Sign up error:', error);
       if (createdUser) {
         try {
           await deleteUser(createdUser);
@@ -134,22 +151,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       setLoading(true);
+      console.log('Logging out...');
       await signOut(auth);
       router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading || !initialized) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="space-y-4 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+  // Return null during initial load to prevent flash of loading UI
+  if (!initialized) {
+    return null;
   }
 
   return (

@@ -80,6 +80,7 @@ export function ServiceTypeForm({ onClose, onSuccess, templeId }: ServiceTypeFor
         icon: values.icon,
       });
       toast({
+        variant: 'success',
         title: 'Success',
         description: 'Service type has been created successfully',
       });

@@ -89,12 +89,14 @@ export default function EventForm({ templeId, event }: EventFormProps) {
         toast({
           title: 'Event updated',
           description: 'The event has been successfully updated.',
+          variant: 'success'
         });
       } else {
         await createEvent(templeId, eventData);
         toast({
           title: 'Event created',
           description: 'The event has been successfully created.',
+          variant: 'success'
         });
       }
 

@@ -39,7 +39,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -125,6 +125,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           contactPerson: values.contactPerson
         });
         toast({
+          variant: 'success',
           title: 'Success',
           description: 'Service has been updated successfully',
         });
@@ -139,6 +140,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           contactPerson: values.contactPerson
         });
         toast({
+          variant: 'success',
           title: 'Success',
           description: 'Service has been created successfully',
         });
@@ -165,10 +167,10 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
     setIsLoading(true);
     
     try {
-      // Force delete the service regardless of registrations
       await deleteService(service.id, user.uid, effectiveTempleId, true);
       
       toast({
+        variant: 'success',
         title: 'Success',
         description: 'Service has been deleted successfully',
       });
