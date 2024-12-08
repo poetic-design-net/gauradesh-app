@@ -93,6 +93,7 @@ function DashboardContent() {
                   phone: 'N/A',
                   userId: undefined
                 },
+                notes: null,
                 createdAt: reg.createdAt,
                 updatedAt: reg.updatedAt,
                 createdBy: ''
