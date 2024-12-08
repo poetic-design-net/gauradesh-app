@@ -9,12 +9,14 @@ import {
   getDocs,
   serverTimestamp,
   Timestamp,
-  FieldValue
+  FieldValue,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
 // Collection references
 export const USERS_COLLECTION = 'users';
+export const ADMIN_COLLECTION = 'admin';
 
 export interface UserProfile {
   uid: string;
@@ -32,13 +34,16 @@ export interface UserProfile {
 export async function createUserProfile(uid: string, data: Partial<UserProfile>) {
   try {
     console.log('Creating user profile:', { uid, data });
+    const batch = writeBatch(db);
+
+    // Create or update user document
     const userRef = doc(db, USERS_COLLECTION, uid);
     const userSnap = await getDoc(userRef);
 
     // If document doesn't exist, create it with all required fields
     if (!userSnap.exists()) {
       const userData = {
-        uid, // Include the uid in the document
+        uid,
         email: data.email || '',
         displayName: data.displayName || '',
         photoURL: null,
@@ -51,8 +56,21 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
       };
 
       console.log('Creating new user document:', userData);
-      await setDoc(userRef, userData);
-      console.log('User document created successfully');
+      batch.set(userRef, userData);
+
+      // Create admin document for permissions
+      const adminRef = doc(db, ADMIN_COLLECTION, uid);
+      batch.set(adminRef, {
+        isAdmin: false,
+        isSuperAdmin: false,
+        templeId: data.templeId || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log('Committing batch write...');
+      await batch.commit();
+      console.log('User and admin documents created successfully');
       return userData;
     }
 
@@ -162,5 +180,32 @@ export async function getUsersByTemple(templeId: string) {
   } catch (error) {
     console.error('Error in getUsersByTemple:', error);
     throw error;
+  }
+}
+
+export async function checkUserPermissions(uid: string) {
+  try {
+    console.log('Checking user permissions:', uid);
+    const adminRef = doc(db, ADMIN_COLLECTION, uid);
+    const adminSnap = await getDoc(adminRef);
+    
+    if (!adminSnap.exists()) {
+      console.log('No admin document found, creating default permissions');
+      await setDoc(adminRef, {
+        isAdmin: false,
+        isSuperAdmin: false,
+        templeId: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return false;
+    }
+
+    const adminData = adminSnap.data();
+    console.log('Admin permissions found:', adminData);
+    return adminData.isAdmin || adminData.isSuperAdmin;
+  } catch (error) {
+    console.error('Error checking user permissions:', error);
+    return false;
   }
 }

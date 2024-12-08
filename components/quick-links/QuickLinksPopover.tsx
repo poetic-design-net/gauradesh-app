@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link2, Plus, X } from 'lucide-react';
+import { Link2, Plus, X, Star } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
@@ -24,14 +25,22 @@ import type { QuickLink } from '@/lib/db/notifications/types';
 export function QuickLinksPopover() {
   const { user } = useAuth();
   const [quickLinks, setQuickLinks] = React.useState<QuickLink[]>([]);
-  const [newLink, setNewLink] = React.useState({ title: '', url: '' });
+  const [newLink, setNewLink] = React.useState({ 
+    title: '', 
+    url: '',
+    internal: false 
+  });
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [editingLink, setEditingLink] = React.useState<QuickLink | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) {
+      setIsLoading(false);
+      setQuickLinks([]);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -54,6 +63,7 @@ export function QuickLinksPopover() {
           
           setQuickLinks(links);
           setIsLoading(false);
+          setError(null);
         },
         (error) => {
           console.error('Error fetching quick links:', error);
@@ -68,97 +78,156 @@ export function QuickLinksPopover() {
       setError('Failed to initialize quick links');
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user?.uid]);
 
   const handleAddLink = async () => {
-    if (!user || !newLink.title || !newLink.url) return;
+    if (!user?.uid || !newLink.title || !newLink.url) return;
 
     try {
+      const token = await user.getIdToken(true);
       const response = await fetch('/api/quick-links', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await user.getIdToken()}`,
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(newLink),
+        body: JSON.stringify({
+          title: newLink.title,
+          url: newLink.url,
+          internal: newLink.internal,
+          userId: user.uid
+        }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to add quick link');
+        throw new Error(data.error || 'Failed to add quick link');
       }
 
-      setNewLink({ title: '', url: '' });
+      setNewLink({ title: '', url: '', internal: false });
       setIsDialogOpen(false);
+      setError(null);
     } catch (error) {
       console.error('Error adding quick link:', error);
-      setError('Failed to add quick link');
+      setError(error instanceof Error ? error.message : 'Failed to add quick link');
     }
   };
 
   const handleUpdateLink = async () => {
-    if (!user || !editingLink) return;
+    if (!user?.uid || !editingLink) return;
 
     try {
+      const token = await user.getIdToken(true);
       const response = await fetch('/api/quick-links', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await user.getIdToken()}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           id: editingLink.id,
           title: newLink.title,
           url: newLink.url,
+          internal: newLink.internal,
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to update quick link');
+        throw new Error(data.error || 'Failed to update quick link');
       }
 
-      setNewLink({ title: '', url: '' });
+      setNewLink({ title: '', url: '', internal: false });
       setEditingLink(null);
       setIsDialogOpen(false);
+      setError(null);
     } catch (error) {
       console.error('Error updating quick link:', error);
-      setError('Failed to update quick link');
+      setError(error instanceof Error ? error.message : 'Failed to update quick link');
     }
   };
 
   const handleDeleteLink = async (id: string) => {
-    if (!user) return;
+    if (!user?.uid) return;
 
     try {
+      const token = await user.getIdToken(true);
       const response = await fetch('/api/quick-links', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await user.getIdToken()}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ id }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to delete quick link');
+        throw new Error(data.error || 'Failed to delete quick link');
       }
+
+      setError(null);
     } catch (error) {
       console.error('Error deleting quick link:', error);
-      setError('Failed to delete quick link');
+      setError(error instanceof Error ? error.message : 'Failed to delete quick link');
+    }
+  };
+
+  const handleTogglePin = async (link: QuickLink) => {
+    if (!user?.uid) return;
+
+    try {
+      const token = await user.getIdToken(true);
+      const response = await fetch('/api/quick-links', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: link.id,
+          pinned: !link.pinned,
+          internal: link.internal, // Preserve internal setting when toggling pin
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update quick link');
+      }
+
+      setError(null);
+    } catch (error) {
+      console.error('Error updating quick link:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update quick link');
     }
   };
 
   const handleEditClick = (link: QuickLink) => {
     setEditingLink(link);
-    setNewLink({ title: link.title, url: link.url });
+    setNewLink({ 
+      title: link.title, 
+      url: link.url,
+      internal: link.internal || false 
+    });
     setIsDialogOpen(true);
+    setError(null);
   };
 
   const handleDialogClose = () => {
-    setNewLink({ title: '', url: '' });
+    setNewLink({ title: '', url: '', internal: false });
     setEditingLink(null);
     setIsDialogOpen(false);
     setError(null);
   };
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <Popover>
@@ -177,6 +246,7 @@ export function QuickLinksPopover() {
                 size="sm" 
                 onClick={() => {
                   setEditingLink(null);
+                  setNewLink({ title: '', url: '', internal: false });
                   setError(null);
                 }}
               >
@@ -212,6 +282,16 @@ export function QuickLinksPopover() {
                     onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
                   />
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="internal"
+                    checked={newLink.internal}
+                    onCheckedChange={(checked) => 
+                      setNewLink({ ...newLink, internal: checked })
+                    }
+                  />
+                  <Label htmlFor="internal">Internal Link</Label>
+                </div>
                 <div className="flex space-x-2">
                   <Button
                     variant="outline"
@@ -223,6 +303,7 @@ export function QuickLinksPopover() {
                   <Button
                     className="w-full"
                     onClick={editingLink ? handleUpdateLink : handleAddLink}
+                    disabled={!newLink.title || !newLink.url}
                   >
                     {editingLink ? 'Update' : 'Add'} Link
                   </Button>
@@ -254,13 +335,30 @@ export function QuickLinksPopover() {
                   <a
                     href={link.url}
                     className="flex items-center space-x-2 flex-grow"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    target={link.internal ? undefined : "_blank"}
+                    rel={link.internal ? undefined : "noopener noreferrer"}
+                    onClick={(e) => {
+                      if (link.internal) {
+                        e.preventDefault();
+                        window.location.href = link.url;
+                      }
+                    }}
                   >
                     <Link2 className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">{link.title}</span>
                   </a>
                   <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleTogglePin(link);
+                      }}
+                      className={link.pinned ? 'text-primary' : ''}
+                    >
+                      <Star className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

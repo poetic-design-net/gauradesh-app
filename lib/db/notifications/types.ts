@@ -16,4 +16,6 @@ export interface QuickLink {
   url: string;
   createdAt: Date;
   updatedAt: Date;
+  pinned?: boolean;
+  internal?: boolean;
 }
