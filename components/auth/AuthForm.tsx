@@ -156,8 +156,8 @@ export function AuthForm() {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto bg-white/10 backdrop-blur-sm border-white/20">
-      <CardHeader className="space-y-2">
+    <Card className="w-full max-w-md mx-auto bg-black/40 backdrop-blur-md border-white/20 my-4">
+      <CardHeader className="space-y-2 pt-6">
         <CardTitle className="text-xl text-white text-center">
           {isSignUp ? 'Create Account' : 'Sign In'}
         </CardTitle>
@@ -167,7 +167,7 @@ export function AuthForm() {
             : 'Enter your email below to sign in to your account'}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -180,7 +180,7 @@ export function AuthForm() {
                     <Input 
                       placeholder="example@email.com" 
                       {...field}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                      className="bg-black/30 border-white/30 text-white placeholder:text-gray-400"
                       disabled={isLoading}
                     />
                   </FormControl>
@@ -199,7 +199,7 @@ export function AuthForm() {
                       <Input 
                         placeholder="Your name" 
                         {...field}
-                        className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                        className="bg-black/30 border-white/30 text-white placeholder:text-gray-400"
                         disabled={isLoading}
                       />
                     </FormControl>
@@ -219,7 +219,7 @@ export function AuthForm() {
                       type="password" 
                       placeholder="••••••" 
                       {...field}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                      className="bg-black/30 border-white/30 text-white placeholder:text-gray-400"
                       disabled={isLoading}
                     />
                   </FormControl>
@@ -240,7 +240,7 @@ export function AuthForm() {
                       disabled={isLoading}
                     >
                       <FormControl>
-                        <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                        <SelectTrigger className="bg-black/30 border-white/30 text-white">
                           <SelectValue placeholder="Select a temple" />
                         </SelectTrigger>
                       </FormControl>
@@ -259,18 +259,18 @@ export function AuthForm() {
             )}
             <Button 
               type="submit" 
-              className="w-full bg-white/10 hover:bg-white/20 text-white border-white/20"
+              className="w-full bg-white hover:bg-white/90 text-black border-white/20"
               disabled={isLoading}
             >
               {isLoading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
           </form>
         </Form>
-        <div className="mt-4 text-center">
+        <div className="mt-6 text-center">
           <Button
             variant="link"
             onClick={() => !isLoading && setIsSignUp(!isSignUp)}
-            className="text-sm text-gray-200 hover:text-white"
+            className="text-sm text-white hover:text-white/80"
             disabled={isLoading}
           >
             {isSignUp
