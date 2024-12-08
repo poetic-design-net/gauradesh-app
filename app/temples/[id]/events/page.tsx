@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Event } from '@/lib/db/events/types';
 import { Suspense } from 'react';
 import { EventLoading } from '@/components/events/EventLoading';
+import { headers } from 'next/headers';
 
 interface EventsPageProps {
   params: {
@@ -12,9 +13,12 @@ interface EventsPageProps {
 }
 
 async function getEvents(templeId: string): Promise<Event[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const headersList = headers();
+  const host = headersList.get('host');
+  const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+  
   const response = await fetch(
-    `${baseUrl}/api/events?templeId=${templeId}`,
+    `${protocol}://${host}/api/events?templeId=${templeId}`,
     { 
       next: { revalidate: 0 },
       headers: {
