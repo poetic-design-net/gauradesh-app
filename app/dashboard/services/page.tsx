@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ServiceRegistration, getUserServiceRegistrations } from '@/lib/db/services';
+import { ServiceRegistration } from '@/lib/db/services/types';
+import { getUserServiceRegistrations } from '@/lib/db/services/registrations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
@@ -97,6 +98,12 @@ export default function ServicesPage() {
                   <p className="text-sm text-muted-foreground">
                     Time: {registration.serviceTimeSlot.start} - {registration.serviceTimeSlot.end}
                   </p>
+                  {registration.message && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                      <p className="text-sm font-medium text-gray-600">Your Message:</p>
+                      <p className="text-sm text-gray-500 mt-1">{registration.message}</p>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground mt-2">
                     Registered on: {registration.createdAt.toDate().toLocaleDateString()}
                   </p>

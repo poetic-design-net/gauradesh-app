@@ -79,7 +79,7 @@ export function TempleAboutPage({ temple }: TempleAboutPageProps) {
   return (
     <div className="min-h-screen relative">
       {/* Background with Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-secondary/5 dark:from-purple-500/10 dark:to-pink-500/10" />
+      <div className="absolute inset-0 bg-gradient-to-b dark:from-purple-500/10 dark:to-pink-500/10" />
       
       {/* Content */}
       <div className="relative container mx-auto p-6 space-y-8">

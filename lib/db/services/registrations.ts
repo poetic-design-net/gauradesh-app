@@ -20,7 +20,7 @@ import { addTempleMember } from '../temples';
 import { isTempleAdmin, isSuperAdmin } from '../admin';
 import { getService } from './services';
 
-export async function deleteRegistration(registrationId: string, userId: string): Promise<void> {
+export async function deleteRegistration(registrationId: string, userId: string, message?: string): Promise<void> {
   return withRetry(async () => {
     const registrationRef = doc(db, SERVICE_REGISTRATIONS_COLLECTION, registrationId);
     const registrationDoc = await getDoc(registrationRef);
@@ -153,7 +153,8 @@ export async function updateServiceRegistrationStatus(
 export async function registerForService(
   userId: string,
   serviceId: string,
-  templeId: string
+  templeId: string,
+  message?: string
 ): Promise<void> {
   if (!userId || !serviceId || !templeId) {
     throw new FirebaseError('invalid-argument', 'User ID, Service ID, and Temple ID are required');
@@ -190,6 +191,7 @@ export async function registerForService(
         serviceDate: service.date,
         serviceTimeSlot: service.timeSlot,
         status: 'pending',
+        message: message,
         createdAt: serverTimestamp() as Timestamp,
         updatedAt: serverTimestamp() as Timestamp,
       };

@@ -36,7 +36,7 @@ export function EventContent({ event, templeId }: EventContentProps) {
               className="object-cover w-full h-full"
             />
             <div className="absolute bottom-0 left-0 right-0 p-8 z-20">
-              <h1 className="text-4xl font-bold mb-2">{event.title}</h1>
+              <h1 className="text-4xl text-white font-bold mb-2">{event.title}</h1>
               <div className="flex items-center text-white/90">
                 <Calendar className="mr-2 h-5 w-5" />
                 {event.startDate.toDate().toLocaleDateString()}

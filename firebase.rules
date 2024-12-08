@@ -33,6 +33,12 @@ service cloud.firestore {
         (adminDoc.isAdmin == true && adminDoc.templeId == templeId));
     }
 
+    function isServiceLeader(serviceData) {
+      return request.auth != null && 
+        serviceData.contactPerson != null && 
+        serviceData.contactPerson.userId == request.auth.uid;
+    }
+
     // Root admin collection
     match /admin/{adminId} {
       allow read: if isAuthenticated();
@@ -164,6 +170,7 @@ service cloud.firestore {
           'id', 'name', 'description', 'type',
           'date', 'timeSlot', 'maxParticipants',
           'currentParticipants', 'pendingParticipants',
+          'contactPerson', 'notes',
           'createdBy', 'templeId',
           'createdAt', 'updatedAt'
         ]) && request.resource.data.timeSlot.keys().hasOnly([
@@ -172,6 +179,8 @@ service cloud.firestore {
         allow update: if isAuthenticated() && (
           isTempleAdmin(templeId) ||
           resource.data.createdBy == request.auth.uid ||
+          (isServiceLeader(resource.data) && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['notes', 'updatedAt'])) ||
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['currentParticipants', 'pendingParticipants', 'updatedAt'])
         );

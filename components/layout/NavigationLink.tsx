@@ -43,13 +43,20 @@ export function NavigationLink({
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {button}
-      </TooltipTrigger>
-      <TooltipContent side="right">
-        <p>{label}</p>
-      </TooltipContent>
-    </Tooltip>
+    <div style={{ position: 'static' }}>
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>
+          {button}
+        </TooltipTrigger>
+        <TooltipContent 
+          side="right" 
+          align="center" 
+          alignOffset={-5}
+          avoidCollisions={false}
+        >
+          <p>{label}</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
   );
 }

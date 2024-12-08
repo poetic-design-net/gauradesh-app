@@ -54,6 +54,10 @@ const formSchema = z.object({
   timeSlot: z.object({
     start: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Please enter a valid time (HH:mm)'),
     end: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Please enter a valid time (HH:mm)')
+  }),
+  contactPerson: z.object({
+    name: z.string().min(2, 'Contact person name must be at least 2 characters'),
+    phone: z.string().regex(/^\+?[0-9\s-()]{8,}$/, 'Please enter a valid phone number')
   })
 });
 
@@ -88,6 +92,10 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
       timeSlot: service?.timeSlot || {
         start: '09:00',
         end: '10:00'
+      },
+      contactPerson: service?.contactPerson || {
+        name: '',
+        phone: ''
       }
     },
   });
@@ -111,7 +119,8 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           maxParticipants: values.maxParticipants,
           type: values.type,
           date: values.date,
-          timeSlot: values.timeSlot
+          timeSlot: values.timeSlot,
+          contactPerson: values.contactPerson
         });
         toast({
           title: 'Success',
@@ -124,7 +133,8 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           maxParticipants: values.maxParticipants,
           type: values.type,
           date: values.date,
-          timeSlot: values.timeSlot
+          timeSlot: values.timeSlot,
+          contactPerson: values.contactPerson
         });
         toast({
           title: 'Success',
@@ -255,6 +265,39 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
               </FormItem>
             )}
           />
+
+          <div className="space-y-4 p-4 rounded-lg bg-muted">
+            <h3 className="font-medium">Service Leader Contact</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="contactPerson.name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Contact person name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="contactPerson.phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone Number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="+1 234 567 8900" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
 
           <FormField
             control={form.control}

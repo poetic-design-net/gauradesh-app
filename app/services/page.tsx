@@ -1,17 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from "@/contexts/AuthContext";
-import { Service, ServiceType } from "@/lib/db/services/types";
-import { getTempleServices, deleteService } from "@/lib/db/services/services";
-import { registerForService } from "@/lib/db/services/registrations";
-import { getTempleServiceTypes } from "@/lib/db/services/service-types";
-import { useToast } from "@/components/ui/use-toast";
-import { ServiceCard } from "@/components/services/ServiceCard";
-import { useTempleContext } from "@/contexts/TempleContext";
+import { useAuth } from '@/contexts/AuthContext';
+import { Service, ServiceType } from '@/lib/db/services/types';
+import { getTempleServices, deleteService } from '@/lib/db/services/services';
+import { registerForService } from '@/lib/db/services/registrations';
+import { getTempleServiceTypes } from '@/lib/db/services/service-types';
+import { useToast } from '@/components/ui/use-toast';
+import { ServiceCard } from '@/components/services/ServiceCard';
+import { useTempleContext } from '@/contexts/TempleContext';
 import { HeartHandshake } from 'lucide-react';
-import { ServiceForm } from "@/components/admin/ServiceForm";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ServiceForm } from '@/components/admin/ServiceForm';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,16 +21,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { isTempleAdmin } from "@/lib/db/admin";
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { isTempleAdmin } from '@/lib/db/admin';
 
 export default function ServicesPage() {
   const { user } = useAuth();
@@ -79,7 +79,6 @@ export default function ServicesPage() {
           getTempleServices(currentTemple.id),
           getTempleServiceTypes(currentTemple.id)
         ]);
-        console.log('Loaded services:', templeServices);
         setServices(templeServices);
         setServiceTypes(types);
       } catch (error) {
@@ -97,7 +96,7 @@ export default function ServicesPage() {
     loadData();
   }, [currentTemple, toast]);
 
-  const handleRegister = async (serviceId: string) => {
+  const handleRegister = async (serviceId: string, message?: string) => {
     if (!user) {
       toast({
         variant: 'destructive',
@@ -117,7 +116,7 @@ export default function ServicesPage() {
     }
 
     try {
-      await registerForService(user.uid, serviceId, currentTemple.id);
+      await registerForService(user.uid, serviceId, currentTemple.id, message);
       toast({
         title: 'Success',
         description: 'You have successfully registered for this service',
@@ -187,7 +186,7 @@ export default function ServicesPage() {
 
   if (!currentTemple) {
     return (
-      <div className="relative flex items-center justify-center min-h-screen animate-in fade-in duration-500">
+      <div className="flex items-center justify-center py-20">
         <div className="text-center space-y-4 p-8 bg-white/10 rounded-lg border border-white/20">
           <HeartHandshake className="h-16 w-16 text-purple-400 mx-auto opacity-50" />
           <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
@@ -205,10 +204,10 @@ export default function ServicesPage() {
 
   return (
     <>
-      <div className="relative container mx-auto p-6 space-y-8 min-h-screen animate-in fade-in duration-500">
+      <div className="animate-in fade-in duration-500">
         {/* Hero Section */}
-        <div className="space-y-4 pt-8">
-          <div className="flex justify-between items-center">
+        <div className="space-y-4 pt-8 px-6">
+          <div className="flex justify-between items-center flex-wrap gap-4">
             <div>
               <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r text-white">
                 Temple Services
@@ -236,16 +235,16 @@ export default function ServicesPage() {
         </div>
 
         {filteredServices.length === 0 ? (
-          <div className="flex items-center justify-center flex-1 min-h-[calc(100vh-200px)]">
+          <div className="flex items-center justify-center py-20 px-6">
             <div className="text-center space-y-4 p-8 backdrop-blur-lg bg-white/10 rounded-lg border border-white/20">
               <HeartHandshake className="h-16 w-16 text-purple-400 mx-auto opacity-50" />
               <p className="text-xl text-gray-300">No services available at this time.</p>
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 pb-8">
+          <div className="grid gap-6 md:grid-cols-2 p-6">
             {filteredServices.map((service) => (
-              <div key={service.id} className="group transition-all duration-300 hover:scale-[1.02]">
+              <div key={service.id} className="group transition-all duration-300">
                 <ServiceCard
                   service={service}
                   onRegister={handleRegister}

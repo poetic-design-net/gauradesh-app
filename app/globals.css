@@ -58,6 +58,12 @@
   }
 }
 
+/* Exclude tooltips from global transitions */
+[data-radix-tooltip-content] {
+  transition: none !important;
+  transform: none !important;
+}
+
 /* Page Transitions */
 .page-transition-enter {
   opacity: 0;

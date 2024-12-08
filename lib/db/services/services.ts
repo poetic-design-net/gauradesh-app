@@ -32,6 +32,12 @@ export async function createService(
       start: string;
       end: string;
     };
+    contactPerson: {
+      name: string;
+      phone: string;
+      userId?: string;
+    };
+    notes?: string;
   }
 ): Promise<Service> {
   if (!templeId) {
@@ -59,6 +65,8 @@ export async function createService(
       pendingParticipants: 0,
       date: Timestamp.fromDate(data.date),
       timeSlot: data.timeSlot,
+      contactPerson: data.contactPerson,
+      notes: data.notes,
       createdAt: serverTimestamp() as Timestamp,
       updatedAt: serverTimestamp() as Timestamp,
       createdBy: userId,
@@ -83,6 +91,12 @@ export async function updateService(
       start: string;
       end: string;
     };
+    contactPerson: {
+      name: string;
+      phone: string;
+      userId?: string;
+    };
+    notes?: string;
   }>
 ): Promise<void> {
   return withRetry(async () => {
@@ -93,9 +107,18 @@ export async function updateService(
       throw new FirebaseError('not-found', 'Service not found');
     }
 
+    // Allow both temple admins and service leaders to update
+    const service = serviceDoc.data() as Service;
     const userIsTempleAdmin = await isTempleAdmin(userId, templeId);
-    if (!userIsTempleAdmin) {
-      throw new FirebaseError('permission-denied', 'Only temple admins can update services for their temple');
+    const isServiceLeader = service.contactPerson?.userId === userId;
+
+    if (!userIsTempleAdmin && !isServiceLeader) {
+      throw new FirebaseError('permission-denied', 'Only temple admins or service leaders can update this service');
+    }
+
+    // If user is service leader but not admin, only allow updating notes
+    if (!userIsTempleAdmin && isServiceLeader && Object.keys(data).some(key => key !== 'notes')) {
+      throw new FirebaseError('permission-denied', 'Service leaders can only update notes');
     }
 
     const updateData: any = {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ServiceForm } from '@/components/admin/ServiceForm';
 import { ServiceTypeForm } from '@/components/admin/ServiceTypeForm';
 import { AdminDashboardSkeleton } from '@/components/admin/AdminDashboardSkeleton';
@@ -25,7 +26,7 @@ import { getTempleEvents, deleteEvent } from '@/lib/db/events/events';
 import { Event } from '@/lib/db/events/types';
 import { getUserProfile, UserProfile } from '@/lib/db/users';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Loader2, Check, X, Clock } from 'lucide-react';
 import { type AdminData } from '@/lib/db/admin';
 import { formatFirebaseTimestamp } from '@/lib/utils';
 import { doc, getDoc } from 'firebase/firestore';
@@ -43,6 +44,43 @@ import {
 } from '@/components/ui/alert-dialog';
 
 const ADMIN_COLLECTION = 'admin';
+
+const getStatusBadge = (status: ServiceRegistration['status']) => {
+  switch (status) {
+    case 'approved':
+      return (
+        <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 w-24 justify-center">
+          <Check className="w-3 h-3" />
+          Approved
+        </Badge>
+      );
+    case 'rejected':
+      return (
+        <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 flex items-center gap-1 w-24 justify-center">
+          <X className="w-3 h-3" />
+          Rejected
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 flex items-center gap-1 w-24 justify-center">
+          <Clock className="w-3 h-3" />
+          Pending
+        </Badge>
+      );
+  }
+};
+
+const getStatusColor = (status: ServiceRegistration['status']) => {
+  switch (status) {
+    case 'approved':
+      return 'bg-green-50 text-green-800 dark:bg-green-900/10 dark:text-green-100';
+    case 'rejected':
+      return 'bg-red-50 text-red-800 dark:bg-red-900/10 dark:text-red-100';
+    default:
+      return 'bg-yellow-50 text-yellow-800 dark:bg-yellow-900/10 dark:text-yellow-100';
+  }
+};
 
 async function getAdminData(uid: string): Promise<AdminData | null> {
   if (!uid) return null;
@@ -326,9 +364,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-6">
       <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
         <div className="flex flex-wrap gap-2">
           <Button 
             onClick={loadData} 
@@ -393,11 +431,11 @@ export default function AdminDashboard() {
         />
       )}
 
-      <Card>
-        <CardHeader>
+      <Card className="shadow-lg">
+        <CardHeader className="border-b">
           <CardTitle>Events</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {loadingEvents ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -413,7 +451,7 @@ export default function AdminDashboard() {
           ) : (
             <div className="overflow-x-auto -mx-4 sm:mx-0">
               <div className="inline-block min-w-full align-middle">
-                <div className="overflow-hidden">
+                <div className="overflow-hidden rounded-lg border">
                   <table className="min-w-full divide-y divide-border">
                     <thead>
                       <tr className="bg-muted/50">
@@ -422,14 +460,14 @@ export default function AdminDashboard() {
                         <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Start Date</th>
                         <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">End Date</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Capacity</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {events.map((event) => (
                         <tr key={event.id} className="hover:bg-muted/50">
-                          <td className="px-4 py-3 text-sm">
-                            <div>{event.title}</div>
+<td className="px-4 py-3 text-sm">
+                            <div className="font-medium">{event.title}</div>
                             <div className="sm:hidden text-xs text-muted-foreground mt-1">
                               {event.location}<br />
                               {event.startDate.toDate().toLocaleString()}
@@ -442,9 +480,13 @@ export default function AdminDashboard() {
                           <td className="hidden sm:table-cell px-4 py-3 text-sm">
                             {event.endDate.toDate().toLocaleString()}
                           </td>
-                          <td className="px-4 py-3 text-sm">{event.capacity || 'Unlimited'}</td>
                           <td className="px-4 py-3 text-sm">
-                            <div className="flex gap-2">
+                            <Badge variant="secondary">
+                              {event.capacity || 'Unlimited'}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right">
+                            <div className="flex justify-end gap-2">
                               <Link href={`/temples/${adminData?.templeId}/events/${event.id}/edit`}>
                                 <Button size="sm" variant="outline" disabled={actionLoading}>
                                   Edit
@@ -475,11 +517,11 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="shadow-lg">
+        <CardHeader className="border-b">
           <CardTitle>Services</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {loadingServices ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -495,7 +537,7 @@ export default function AdminDashboard() {
           ) : (
             <div className="overflow-x-auto -mx-4 sm:mx-0">
               <div className="inline-block min-w-full align-middle">
-                <div className="overflow-hidden">
+                <div className="overflow-hidden rounded-lg border">
                   <table className="min-w-full divide-y divide-border">
                     <thead>
                       <tr className="bg-muted/50">
@@ -504,21 +546,23 @@ export default function AdminDashboard() {
                         <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Date</th>
                         <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Time</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Participants</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {services.map((service) => (
                         <tr key={service.id} className="hover:bg-muted/50">
                           <td className="px-4 py-3 text-sm">
-                            <div>{service.name}</div>
+                            <div className="font-medium">{service.name}</div>
                             <div className="sm:hidden text-xs text-muted-foreground mt-1">
                               {service.type}<br />
                               {formatFirebaseTimestamp(service.date)}<br />
                               {service.timeSlot.start} - {service.timeSlot.end}
                             </div>
                           </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-sm">{service.type}</td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                            <Badge variant="outline">{service.type}</Badge>
+                          </td>
                           <td className="hidden sm:table-cell px-4 py-3 text-sm">
                             {formatFirebaseTimestamp(service.date)}
                           </td>
@@ -526,15 +570,22 @@ export default function AdminDashboard() {
                             {service.timeSlot.start} - {service.timeSlot.end}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            {service.currentParticipants}/{service.maxParticipants}
-                            {service.pendingParticipants > 0 && ` (${service.pendingParticipants} pending)`}
+                            <Badge variant="secondary">
+                              {service.currentParticipants}/{service.maxParticipants}
+                            </Badge>
+                            {service.pendingParticipants > 0 && (
+                              <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100">
+                                {service.pendingParticipants} pending
+                              </Badge>
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3 text-sm text-right">
                             <Button
                               size="sm"
                               variant="destructive"
                               onClick={() => handleDeleteService(service)}
                               disabled={actionLoading}
+                              className="ml-auto"
                             >
                               {actionLoading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -555,11 +606,11 @@ export default function AdminDashboard() {
       </Card>
 
       {adminData?.templeId && (
-        <Card>
-          <CardHeader>
+        <Card className="shadow-lg">
+          <CardHeader className="border-b">
             <CardTitle>Registrations</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {loadingRegistrations ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -578,7 +629,7 @@ export default function AdminDashboard() {
             ) : (
               <div className="overflow-x-auto -mx-4 sm:mx-0">
                 <div className="inline-block min-w-full align-middle">
-                  <div className="overflow-hidden">
+                  <div className="overflow-hidden rounded-lg border">
                     <table className="min-w-full divide-y divide-border">
                       <thead>
                         <tr className="bg-muted/50">
@@ -586,17 +637,24 @@ export default function AdminDashboard() {
                           <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">User</th>
                           <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
                           <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Date</th>
-                          <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                          <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Message</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
                         {registrations.map((reg) => (
                           <tr key={reg.id} className="hover:bg-muted/50">
                             <td className="px-4 py-3 text-sm">
-                              <div>{reg.serviceName}</div>
+                              <div className="font-medium">{reg.serviceName}</div>
                               <div className="sm:hidden text-xs text-muted-foreground mt-1">
                                 {reg.user?.email}<br />
                                 {formatFirebaseTimestamp(reg.createdAt)}
+                                {reg.message && (
+                                  <>
+                                    <br />
+                                    <span className="italic">"{reg.message}"</span>
+                                  </>
+                                )}
                               </div>
                             </td>
                             <td className="hidden sm:table-cell px-4 py-3 text-sm">{reg.user?.email}</td>
@@ -604,23 +662,37 @@ export default function AdminDashboard() {
                               <select
                                 value={reg.status}
                                 onChange={(e) => handleStatusUpdate(reg.id, e.target.value as ServiceRegistration['status'])}
-                                className="w-full sm:w-auto border rounded p-2"
+                                className={`w-full sm:w-auto rounded-md border p-2 ${getStatusColor(reg.status)} transition-colors duration-200 cursor-pointer hover:opacity-90 focus:ring-2 focus:ring-offset-2 ${
+                                  reg.status === 'approved' 
+                                    ? 'focus:ring-green-500 hover:bg-green-200 dark:hover:bg-green-900/20' 
+                                    : reg.status === 'rejected'
+                                    ? 'focus:ring-red-500 hover:bg-red-200 dark:hover:bg-red-900/20'
+                                    : 'focus:ring-yellow-500 hover:bg-yellow-200 dark:hover:bg-yellow-900/20'
+                                }`}
                                 disabled={actionLoading}
                               >
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                                <option value="rejected">Rejected</option>
+                                <option value="pending" className="bg-white dark:bg-gray-800">Change to Pending</option>
+                                <option value="approved" className="bg-white dark:bg-gray-800">Change to Approved</option>
+                                <option value="rejected" className="bg-white dark:bg-gray-800">Change to Rejected</option>
                               </select>
                             </td>
                             <td className="hidden sm:table-cell px-4 py-3 text-sm">
                               {formatFirebaseTimestamp(reg.createdAt)}
                             </td>
-                            <td className="px-4 py-3 text-sm">
+                            <td className="hidden sm:table-cell px-4 py-3 text-sm">
+                              {reg.message ? (
+                                <span className="italic text-gray-600">"{reg.message}"</span>
+                              ) : (
+                                <span className="text-gray-400">No message</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right">
                               <Button
                                 size="sm"
                                 variant="destructive"
                                 onClick={() => handleDeleteRegistration(reg.id)}
                                 disabled={actionLoading}
+                                className="ml-auto"
                               >
                                 {actionLoading ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -653,7 +725,7 @@ export default function AdminDashboard() {
             <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDeleteService} 
-              className="bg-red-600"
+              className="bg-red-600 hover:bg-red-700"
               disabled={actionLoading}
             >
               {actionLoading ? (
@@ -677,7 +749,7 @@ export default function AdminDashboard() {
             <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDeleteEvent} 
-              className="bg-red-600"
+              className="bg-red-600 hover:bg-red-700"
               disabled={actionLoading}
             >
               {actionLoading ? (

@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { Header } from './Header';
 import { useNavigation } from '@/contexts/NavigationContext';
+import { usePathname } from 'next/navigation';
 
 function PageLoading() {
   return (
@@ -21,22 +22,26 @@ function PageLoading() {
 
 export function MainContent({ children }: { children: React.ReactNode }) {
   const { isExpanded } = useNavigation();
+  const pathname = usePathname();
+  const isHomePage = pathname === '/';
   
   return (
     <div 
-      style={{ 
-        willChange: 'transform, width',
-        transform: `translateX(${isExpanded ? '16rem' : '4rem'})`,
-        width: `calc(100% - ${isExpanded ? '16rem' : '4rem'})`,
-      }}
-      className="transition-all duration-300 ease-in-out"
+      className={`
+        relative
+        transition-all duration-300 ease-in-out
+        ${isExpanded ? 'md:ml-[280px]' : 'md:ml-16'}
+        ${isHomePage ? 'h-screen overflow-hidden' : ''}
+      `}
     >
-      <div className="sticky top-0 z-40 bg-background">
-        <Header />
-      </div>
-      <main className="flex-1 px-6 py-4">
+      <Header />
+      
+      <main className={`
+        flex-1 
+        ${isHomePage ? 'h-[calc(100vh-3.5rem)]' : 'px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6'}
+      `}>
         <Suspense fallback={<PageLoading />}>
-          <div className="max-w-7xl mx-auto">
+          <div className={`w-full ${isHomePage ? '' : 'max-w-[95%] md:max-w-7xl mx-auto'}`}>
             {children}
           </div>
         </Suspense>

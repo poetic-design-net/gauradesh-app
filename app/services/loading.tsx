@@ -1,8 +1,8 @@
 export default function ServicesLoading() {
   return (
-    <div className="relative container mx-auto p-6 space-y-8 min-h-screen opacity-0 animate-in fade-in duration-500">
+    <div className="relative animate-in fade-in duration-500">
       {/* Hero Section */}
-      <div className="space-y-4 pt-8">
+      <div className="space-y-4 pt-8 px-6">
         <div className="flex justify-between items-center">
           <div>
             <div className="h-10 w-64 bg-white/10 rounded animate-pulse" />
@@ -12,7 +12,7 @@ export default function ServicesLoading() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 p-6">
         {[1, 2, 3, 4].map((i) => (
           <div 
             key={i} 

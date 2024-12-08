@@ -17,6 +17,12 @@ export interface Service {
     start: string;
     end: string;
   };
+  contactPerson: {
+    name: string;
+    phone: string;
+    userId?: string; // Added to track service leader
+  };
+  notes?: string; // Added for service leader notes
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
@@ -44,6 +50,7 @@ export interface ServiceRegistration {
     end: string;
   };
   status: 'pending' | 'approved' | 'rejected';
+  message?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
