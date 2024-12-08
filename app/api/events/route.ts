@@ -19,8 +19,36 @@ export async function GET(request: Request) {
     }));
 
     return NextResponse.json({ events });
-  } catch (error) {
-    console.error('Error fetching events:', error);
-    return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error fetching events:', {
+      error: error.message,
+      code: error.code,
+      templeId,
+      path: `temples/${templeId}/events`
+    });
+    
+    // Return more specific error messages to help diagnose deployment issues
+    if (error.code === 'permission-denied') {
+      return NextResponse.json(
+        { error: 'Permission denied accessing events' },
+        { status: 403 }
+      );
+    }
+    
+    if (error.code === 'not-found') {
+      return NextResponse.json(
+        { error: 'Temple or events collection not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { 
+        error: 'Failed to fetch events',
+        details: error.message,
+        code: error.code 
+      }, 
+      { status: 500 }
+    );
   }
 }

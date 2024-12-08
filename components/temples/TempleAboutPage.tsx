@@ -24,16 +24,24 @@ interface TempleAboutPageProps {
 export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps) {
   const [members, setMembers] = useState<EnrichedMember[]>(initialMembers);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const getCurrentDayPrograms = () => {
-    if (!temple.dailyPrograms) return [];
-    
-    const days: DayOfWeek[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const currentDay = days[new Date().getDay()];
-    return temple.dailyPrograms[currentDay];
+    try {
+      if (!temple?.dailyPrograms) return [];
+      
+      const days: DayOfWeek[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const currentDay = days[new Date().getDay()];
+      return temple.dailyPrograms[currentDay] || [];
+    } catch (error) {
+      console.error('Error getting daily programs:', error);
+      return [];
+    }
   };
 
   const formatTime = (time: string) => {
+    if (!time) return 'Time not specified';
+    
     try {
       const [hours, minutes] = time.split(':');
       const date = new Date();
@@ -50,47 +58,83 @@ export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps
 
   // Subscribe to real-time updates for members
   useEffect(() => {
-    const adminsRef = collection(db, `temples/${temple.id}/temple_admins`);
-    const membersRef = collection(db, `temples/${temple.id}/temple_members`);
-    
-    const unsubscribeAdmins = onSnapshot(adminsRef, async (snapshot) => {
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/temples/members?templeId=${temple.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setMembers(data.members);
-        }
-      } catch (error) {
-        console.error('Error fetching updated members:', error);
-      } finally {
-        setLoading(false);
-      }
-    });
+    if (!temple?.id) {
+      console.error('Temple ID is missing');
+      return;
+    }
 
-    const unsubscribeMembers = onSnapshot(membersRef, async (snapshot) => {
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/temples/members?templeId=${temple.id}`);
-        if (response.ok) {
+    setLoading(true);
+    setError(null);
+
+    let unsubscribeAdmins: (() => void) | undefined;
+    let unsubscribeMembers: (() => void) | undefined;
+
+    try {
+      const adminsRef = collection(db, `temples/${temple.id}/temple_admins`);
+      const membersRef = collection(db, `temples/${temple.id}/temple_members`);
+      
+      const handleMemberUpdate = async () => {
+        try {
+          const response = await fetch(`/api/temples/members?templeId=${temple.id}`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch members: ${response.statusText}`);
+          }
           const data = await response.json();
+          if (data.error) {
+            throw new Error(data.error);
+          }
           setMembers(data.members);
+          setError(null);
+        } catch (error) {
+          console.error('Error fetching updated members:', error);
+          setError('Failed to update member list');
+          // Keep showing existing members instead of clearing them
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching updated members:', error);
-      } finally {
-        setLoading(false);
-      }
-    });
+      };
+
+      unsubscribeAdmins = onSnapshot(
+        adminsRef,
+        () => handleMemberUpdate(),
+        (error) => {
+          console.error('Admin subscription error:', error);
+          setError('Failed to subscribe to admin updates');
+          setLoading(false);
+        }
+      );
+
+      unsubscribeMembers = onSnapshot(
+        membersRef,
+        () => handleMemberUpdate(),
+        (error) => {
+          console.error('Member subscription error:', error);
+          setError('Failed to subscribe to member updates');
+          setLoading(false);
+        }
+      );
+    } catch (error) {
+      console.error('Error setting up subscriptions:', error);
+      setError('Failed to initialize member updates');
+      setLoading(false);
+    }
 
     return () => {
-      unsubscribeAdmins();
-      unsubscribeMembers();
+      unsubscribeAdmins?.();
+      unsubscribeMembers?.();
     };
-  }, [temple.id]);
+  }, [temple?.id]);
 
   const currentDayPrograms = getCurrentDayPrograms();
   const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+
+  if (!temple) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-lg text-muted-foreground">Temple information not available</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative">
@@ -108,6 +152,11 @@ export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps
               fill
               className="object-cover"
               priority
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                img.style.display = 'none';
+                console.error('Failed to load temple image:', temple.aboutImageUrl);
+              }}
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-primary/10 to-secondary/10 dark:from-purple-500/20 dark:to-pink-500/20 flex items-center justify-center">
@@ -144,7 +193,7 @@ export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps
                 {currentDay}
               </p>
               
-              {currentDayPrograms.length > 0 ? (
+              {currentDayPrograms?.length > 0 ? (
                 <div className="space-y-4">
                   {currentDayPrograms.map((program, index) => (
                     <div
@@ -178,6 +227,12 @@ export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps
             </h2>
           </div>
 
+          {error && (
+            <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
+              {error}
+            </div>
+          )}
+
           {loading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -196,7 +251,7 @@ export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {members.map((member) => (
+              {members?.map((member) => (
                 <Card 
                   key={member.id} 
                   className="group bg-card/50 hover:bg-card/80 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-lg border-border dark:border-white/20 transition-all duration-300"
@@ -204,14 +259,14 @@ export function TempleAboutPage({ temple, initialMembers }: TempleAboutPageProps
                   <CardContent className="p-6">
                     <div className="flex items-center space-x-4">
                       <Avatar className="h-16 w-16 ring-2 ring-primary/30 dark:ring-purple-400/30 transition-transform duration-300 group-hover:scale-105">
-                        <AvatarImage src={member.profile.photoURL || undefined} />
+                        <AvatarImage src={member.profile?.photoURL || undefined} />
                         <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20 dark:from-purple-500/20 dark:to-pink-500/20">
-                          {member.profile.displayName?.[0] || member.profile.email?.[0]}
+                          {member.profile?.displayName?.[0] || member.profile?.email?.[0] || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <div className="font-medium text-foreground dark:text-white text-lg">
-                          {member.profile.displayName || 'Anonymous'}
+                          {member.profile?.displayName || 'Anonymous'}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           {member.role === 'admin' ? (
