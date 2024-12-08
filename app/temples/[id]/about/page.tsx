@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { TempleAboutPage } from '@/components/temples/TempleAboutPage';
 import { adminDb } from '@/lib/firebase-admin';
 import { Temple } from '@/lib/db/temples';
+import { headers } from 'next/headers';
 
 interface AboutPageProps {
   params: {
@@ -23,9 +24,12 @@ async function getTempleData(templeId: string): Promise<Temple> {
 }
 
 async function getInitialMembers(templeId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const headersList = headers();
+  const host = headersList.get('host');
+  const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+  
   const response = await fetch(
-    `${baseUrl}/api/temples/members?templeId=${templeId}`,
+    `${protocol}://${host}/api/temples/members?templeId=${templeId}`,
     { next: { revalidate: 0 } }
   );
 
