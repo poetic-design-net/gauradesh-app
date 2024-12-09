@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTemple, Temple, updateTemple } from '@/lib/db/temples';
+import { getTemple, Temple, updateTempleDetails } from '@/lib/db/temples';
 import { TempleAboutForm } from '@/components/admin/TempleAboutForm';
 import { NewsForm } from '@/components/admin/NewsForm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,7 +64,7 @@ export default function AdminSettingsPage() {
     if (!temple) return;
 
     try {
-      await updateTemple(temple.id, { logoUrl: url });
+      await updateTempleDetails(temple.id, { logoUrl: url });
       setTemple({ ...temple, logoUrl: url });
       toast({
         description: url ? 'Logo updated successfully' : 'Logo removed successfully'
@@ -93,7 +93,7 @@ export default function AdminSettingsPage() {
     return (
       <div className="container mx-auto p-6">
         <div className="text-center text-red-600 dark:text-red-400">
-          Failed to load temple settings
+          Failed to load settings
         </div>
       </div>
     );
@@ -102,13 +102,12 @@ export default function AdminSettingsPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Temple Settings</h1>
-
+        <h1 className="text-3xl font-bold">Settings</h1>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Temple Logo</CardTitle>
+          <CardTitle>Logo</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="max-w-[200px]">
@@ -148,7 +147,7 @@ export default function AdminSettingsPage() {
         <CardContent>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium">Temple Name</label>
+              <label className="block text-sm font-medium">Name</label>
               <p className="text-lg">{temple.name}</p>
             </div>
             <div>
