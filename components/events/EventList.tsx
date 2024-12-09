@@ -15,32 +15,85 @@ export interface EventListProps {
 }
 
 function getDateFromTimestamp(timestamp: Timestamp | { seconds: number; nanoseconds: number } | Date): Date {
+  if (!timestamp) return new Date();
   if (timestamp instanceof Date) return timestamp;
   if ('toDate' in timestamp) return timestamp.toDate();
   if ('seconds' in timestamp) return new Date(timestamp.seconds * 1000);
   return new Date(timestamp);
 }
 
+function isValidEvent(event: any): event is Event {
+  return (
+    event &&
+    typeof event.id === 'string' &&
+    typeof event.title === 'string' &&
+    typeof event.description === 'string' &&
+    typeof event.location === 'string' &&
+    (event.startDate instanceof Timestamp || 'seconds' in event.startDate) &&
+    (event.endDate instanceof Timestamp || 'seconds' in event.endDate)
+  );
+}
+
 export default function EventList({ events: initialEvents, templeId }: EventListProps) {
-  const [events, setEvents] = useState(initialEvents);
+  const [events, setEvents] = useState<Event[]>(() => 
+    Array.isArray(initialEvents) ? initialEvents.filter(isValidEvent) : []
+  );
+  const [isLoading, setIsLoading] = useState(true);
 
   // Subscribe to real-time updates
   useEffect(() => {
+    if (!templeId) return;
+
     const eventsRef = collection(db, `temples/${templeId}/events`);
     const q = query(eventsRef, orderBy('startDate', 'desc'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const updatedEvents = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Event));
+      const updatedEvents = snapshot.docs
+        .map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Event))
+        .filter(isValidEvent);
       setEvents(updatedEvents);
+      setIsLoading(false);
     }, (error) => {
       console.error('Error in real-time events subscription:', error);
+      setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    // Set a timeout to ensure loading state shows for at least a brief moment
+    const loadingTimeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(loadingTimeout);
+    };
   }, [templeId]);
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="hover:shadow-lg transition-shadow animate-pulse">
+            <CardHeader>
+              <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-20 bg-gray-200 rounded w-full"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   if (!events?.length) {
     return (

@@ -63,20 +63,7 @@ export default function ServicesPage() {
   }, [user]);
 
   if (loading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2].map((i) => (
-          <Card key={i} className="animate-pulse">
-            <CardHeader>
-              <div className="h-6 bg-gray-200 rounded w-1/3" />
-            </CardHeader>
-            <CardContent>
-              <div className="h-4 bg-gray-200 rounded w-1/2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
+    return null; // Return nothing while loading instead of skeleton
   }
 
   if (error) {

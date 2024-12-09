@@ -12,6 +12,7 @@ import {
   type QueryDocumentSnapshot 
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { auth } from '../firebase';
 import { FirebaseError } from '../firebase-error';
 
 // Collection references
@@ -51,9 +52,23 @@ export async function isSuperAdmin(uid: string): Promise<boolean> {
   if (!uid) return false;
   
   try {
+    // Force token refresh to get latest claims
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      await currentUser.getIdToken(true);
+    }
+
     const adminRef = doc(db, ADMIN_COLLECTION, uid);
     const adminDoc = await getDoc(adminRef);
-    return adminDoc.exists() && adminDoc.data()?.isSuperAdmin === true;
+    const adminData = adminDoc.data();
+    
+    console.log('Checking super admin status:', {
+      uid,
+      exists: adminDoc.exists(),
+      data: adminData
+    });
+    
+    return adminDoc.exists() && adminData?.isSuperAdmin === true;
   } catch (error) {
     console.error('Error checking super admin status:', error);
     return false;

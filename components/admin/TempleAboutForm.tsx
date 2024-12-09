@@ -6,15 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { Temple, updateTemple, TempleUpdateData, TempleProgram } from '@/lib/db/temples';
+import { Temple, updateTempleDetails, TempleUpdateData, TempleProgram } from '@/lib/db/temples';
 import { TempleProgramForm } from './TempleProgramForm';
-import Image from 'next/image';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ImageUpload } from '@/components/ui/image-upload';
 import { serverTimestamp } from 'firebase/firestore';
-
-const storage = getStorage();
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 interface TempleAboutFormProps {
   temple: Temple;
@@ -23,8 +18,6 @@ interface TempleAboutFormProps {
 
 export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
   const [loading, setLoading] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>(temple.aboutImageUrl || '');
   const [description, setDescription] = useState(temple.description || '');
   const [socialMedia, setSocialMedia] = useState(temple.socialMedia || {});
   const [dailyPrograms, setDailyPrograms] = useState<TempleProgram>(temple.dailyPrograms || {
@@ -38,39 +31,6 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
   });
   const { toast } = useToast();
 
-  const validateFile = (file: File): string | null => {
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      return 'Please upload a valid image file (JPEG, PNG, or WebP)';
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return 'File size must be less than 5MB';
-    }
-    return null;
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const error = validateFile(file);
-      if (error) {
-        toast({
-          variant: 'destructive',
-          title: 'Invalid File',
-          description: error,
-        });
-        return;
-      }
-
-      setImageFile(file);
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSocialMediaChange = (field: string, value: string) => {
     setSocialMedia(prev => ({
       ...prev,
@@ -78,41 +38,39 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
     }));
   };
 
+  const handleImageUpload = async (url: string) => {
+    try {
+      // Update temple data with new image URL
+      await updateTempleDetails(temple.id, {
+        aboutImageUrl: url
+      });
+
+      toast({
+        title: 'Success',
+        variant: 'success',
+        description: 'Temple image has been updated',
+      });
+    } catch (error) {
+      console.error('Error updating temple image:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update temple image',
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      let aboutImageUrl = temple.aboutImageUrl;
-
-      // Upload new image if selected
-      if (imageFile) {
-        try {
-          const imageRef = ref(storage, `temples/${temple.id}/about-image`);
-          await uploadBytes(imageRef, imageFile);
-          aboutImageUrl = await getDownloadURL(imageRef);
-        } catch (error) {
-          console.error('Error uploading image:', error);
-          toast({
-            variant: 'destructive',
-            title: 'Upload Error',
-            description: 'Failed to upload image. Please make sure Firebase Storage is properly configured.',
-          });
-          setLoading(false);
-          return;
-        }
-      }
-
       // Update temple data
-      const updateData: TempleUpdateData = {
+      await updateTempleDetails(temple.id, {
         description,
-        aboutImageUrl,
         dailyPrograms,
-        socialMedia,
-        updatedAt: serverTimestamp()
-      };
-
-      await updateTemple(temple.id, updateData);
+        socialMedia
+      });
 
       toast({
         title: 'Success',
@@ -142,29 +100,15 @@ export function TempleAboutForm({ temple, onSuccess }: TempleAboutFormProps) {
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <label className="block text-sm font-medium">Temple Image</label>
-            <div className="flex flex-col items-center gap-4">
-              {imagePreview && (
-                <div className="relative w-full aspect-video">
-                  <Image
-                    src={imagePreview}
-                    alt="Temple preview"
-                    fill
-                    className="object-cover rounded-lg"
-                  />
-                </div>
-              )}
-              <div className="w-full">
-                <Input
-                  type="file"
-                  accept={ALLOWED_FILE_TYPES.join(',')}
-                  onChange={handleImageChange}
-                  className="w-full"
-                />
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Accepted formats: JPEG, PNG, WebP. Max size: 5MB
-                </p>
-              </div>
-            </div>
+            <ImageUpload
+              onUpload={handleImageUpload}
+              currentImageUrl={temple.aboutImageUrl}
+              path={`temples/${temple.id}/about-image`}
+              aspectRatio="wide"
+            />
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Image will be automatically converted to WebP format for optimal performance
+            </p>
           </div>
 
           <div className="space-y-2">

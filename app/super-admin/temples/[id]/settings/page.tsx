@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Temple, getTemple, updateTemple } from '@/lib/db/temples';
+import { Temple, getTemple } from '@/lib/db/temples';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { auth } from '@/lib/firebase';
 
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -57,7 +58,7 @@ export default function TempleSettingsPage() {
         setTemple(templeData);
         form.reset({
           name: templeData.name,
-          location: templeData.location,
+          location: templeData.location, // Changed from address to location
           description: templeData.description || '',
         });
       } catch (error) {
@@ -80,7 +81,32 @@ export default function TempleSettingsPage() {
     if (!temple) return;
 
     try {
-      await updateTemple(temple.id, values);
+      // Get the current user's token
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      // Call the API endpoint to update temple
+      const response = await fetch('/api/temples/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          templeId: temple.id,
+          name: values.name,
+          location: values.location,
+          description: values.description
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update temple');
+      }
+
       toast({
         title: 'Success',
         description: 'Temple settings have been updated successfully',

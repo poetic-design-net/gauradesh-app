@@ -11,7 +11,7 @@ export default function ServicesLayout({ children }: ServicesLayoutProps) {
       <div 
         className="fixed inset-0 bg-cover bg-center bg-fixed bg-no-repeat pointer-events-none"
         style={{ 
-          backgroundImage: 'url("https://s3-ap-southeast-1.amazonaws.com/images.brajrasik.org/66407fbea13f2d00091c9a30.jpeg")',
+          backgroundImage: 'url("https://firebasestorage.googleapis.com/v0/b/isckon-a55f5.firebasestorage.app/o/background.webp?alt=media&token=e21bac62-a791-4b92-8f50-ff28535b924c")',
           zIndex: -1
         }}
       >

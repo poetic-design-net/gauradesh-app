@@ -82,7 +82,7 @@ service cloud.firestore {
           'userId', 'title', 'message', 'timestamp', 'read',
           'type', 'link'
         ]) &&
-        (request.resource.data.userId == request.auth.uid || isAdmin());  // Allow admins to create notifications for others
+        (request.resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAuthenticated() && 
         resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
@@ -117,22 +117,18 @@ service cloud.firestore {
         request.auth.uid == userId &&
         request.resource.data.keys().hasAll([
           'uid', 'email', 'displayName', 'photoURL', 'bio',
-          'isAdmin', 'isSuperAdmin', 'templeId',
-          'createdAt', 'updatedAt'
+          'templeId', 'createdAt', 'updatedAt'
         ]) &&
         request.resource.data.keys().hasOnly([
           'uid', 'email', 'displayName', 'photoURL', 'bio',
-          'isAdmin', 'isSuperAdmin', 'templeId',
-          'createdAt', 'updatedAt'
+          'templeId', 'createdAt', 'updatedAt'
         ]) &&
-        request.resource.data.uid == userId &&
-        request.resource.data.isAdmin == false &&
-        request.resource.data.isSuperAdmin == false;
+        request.resource.data.uid == userId;
       
       // Allow updating own profile or admin updates
       allow update: if isAuthenticated() && (
         (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['displayName', 'photoURL', 'updatedAt'])) || 
+          .hasOnly(['displayName', 'photoURL', 'bio', 'templeId', 'updatedAt'])) || 
         (isAdmin() && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'updatedAt'])) ||
         isSuperAdmin()
@@ -178,25 +174,25 @@ service cloud.firestore {
     match /temples/{templeId} {
       // Allow reading temples without authentication for sign-up
       allow read: if true;
+      
+      // Allow creating temples with minimal required fields
       allow create: if isAuthenticated() && isSuperAdmin() && 
-        request.resource.data.keys().hasOnly([
-          'name', 'description', 'aboutImageUrl', 'logoUrl', 'address',
-          'phone', 'email', 'website', 'dailyPrograms', 'socialMedia',
-          'news', 'createdAt', 'updatedAt'
-        ]) &&
-        (request.resource.data.news == null || isValidNews(request.resource.data.news));
+        request.resource.data.keys().hasAll(['name', 'address', 'createdAt', 'updatedAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.address is string &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      
       allow update: if isAuthenticated() && (
         (isTempleAdmin(templeId) && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['description', 'aboutImageUrl', 'logoUrl', 'phone', 'email', 'website', 
                    'dailyPrograms', 'socialMedia', 'news', 'updatedAt']) &&
           (request.resource.data.news == null || isValidNews(request.resource.data.news))) ||
-        (isSuperAdmin() && request.resource.data.keys().hasOnly([
-          'name', 'description', 'aboutImageUrl', 'logoUrl', 'address',
-          'phone', 'email', 'website', 'dailyPrograms', 'socialMedia',
-          'news', 'createdAt', 'updatedAt'
-        ]) &&
-        (request.resource.data.news == null || isValidNews(request.resource.data.news)))
+        (isSuperAdmin() && request.resource.data.keys().hasAll(['name', 'address']) &&
+          request.resource.data.name is string &&
+          request.resource.data.address is string)
       );
+      
       allow delete: if isAuthenticated() && isSuperAdmin();
 
       match /events/{eventId} {
@@ -268,14 +264,19 @@ service cloud.firestore {
 
       match /temple_members/{memberId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && 
-          request.resource.data.keys().hasOnly([
-            'userId', 'membershipType', 'joinDate',
-            'status', 'createdAt', 'updatedAt'
-          ]) && (
-            isTempleAdmin(templeId) ||
-            request.resource.data.userId == request.auth.uid
-          );
+        allow create: if isAuthenticated() && (
+          // Allow temple admins to create members
+          (isTempleAdmin(templeId) &&
+           request.resource.data.keys().hasOnly([
+             'userId', 'membershipType', 'joinDate',
+             'status', 'createdAt', 'updatedAt'
+           ])) ||
+          // Allow server to create members for users with matching templeId
+          (request.auth.token.admin == true &&
+           request.resource.data.keys().hasOnly([
+             'userId', 'role', 'createdAt', 'updatedAt'
+           ]))
+        );
         allow update: if isAuthenticated() && 
           isTempleAdmin(templeId) && 
           request.resource.data.diff(resource.data).affectedKeys()

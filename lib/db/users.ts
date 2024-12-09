@@ -24,8 +24,6 @@ export interface UserProfile {
   displayName?: string;
   photoURL?: string | null;
   bio?: string | null;
-  isAdmin?: boolean;
-  isSuperAdmin?: boolean;
   templeId?: string | null;
   createdAt?: Timestamp | FieldValue;
   updatedAt?: Timestamp | FieldValue;
@@ -48,8 +46,6 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
         displayName: data.displayName || '',
         photoURL: null,
         bio: null,
-        isAdmin: false,
-        isSuperAdmin: false,
         templeId: data.templeId || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -110,8 +106,6 @@ export async function getUserProfile(uid: string) {
       displayName: '',
       photoURL: null,
       bio: null,
-      isAdmin: false,
-      isSuperAdmin: false,
       templeId: null,
     } as UserProfile;
   } catch (error) {

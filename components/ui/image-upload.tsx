@@ -15,6 +15,34 @@ interface ImageUploadProps {
   aspectRatio?: "square" | "wide";
 }
 
+async function convertToWebP(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement('img');
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Could not convert to WebP'));
+        }
+      }, 'image/webp', 0.8); // 0.8 quality gives good balance between size and quality
+    };
+    img.onerror = () => reject(new Error('Could not load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export function ImageUpload({ 
   onUpload, 
   currentImageUrl, 
@@ -40,9 +68,20 @@ export function ImageUpload({
       };
       reader.readAsDataURL(file);
 
-      // Upload to Firebase Storage
+      // Convert to WebP
+      const webpBlob = await convertToWebP(file);
+      const webpFile = new File([webpBlob], file.name.replace(/\.[^/.]+$/, '.webp'), {
+        type: 'image/webp'
+      });
+
+      // Upload to Firebase Storage with metadata
+      const metadata = {
+        contentType: 'image/webp',
+        cacheControl: 'public, max-age=31536000', // Cache for 1 year
+      };
+      
       const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file);
+      await uploadBytes(storageRef, webpFile, metadata);
       const downloadUrl = await getDownloadURL(storageRef);
       
       onUpload(downloadUrl);
@@ -97,7 +136,7 @@ export function ImageUpload({
         >
           <Upload className="h-6 w-6 mb-2" />
           <span className="text-sm">
-            {uploading ? 'Uploading...' : 'Upload Image'}
+            {uploading ? 'Converting & Uploading...' : 'Upload Image'}
           </span>
         </Button>
       )}

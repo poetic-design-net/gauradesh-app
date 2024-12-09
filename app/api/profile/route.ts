@@ -30,24 +30,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
+    // Get user profile
     const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
     
     if (!userDoc.exists) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const data = userDoc.data();
-    const profile: UserProfile = {
+    const userData = userDoc.data();
+
+    // Get admin status from admin collection
+    const adminDoc = await adminDb.collection('admin').doc(decodedToken.uid).get();
+    const adminData = adminDoc.exists ? adminDoc.data() : null;
+
+    const profile: UserProfile & { isAdmin?: boolean; isSuperAdmin?: boolean } = {
       uid: userDoc.id,
-      email: data?.email || '',
-      displayName: data?.displayName || '',
-      photoURL: data?.photoURL || null,
-      bio: data?.bio || null,
-      isAdmin: data?.isAdmin || false,
-      isSuperAdmin: data?.isSuperAdmin || false,
-      templeId: data?.templeId || null,
-      createdAt: data?.createdAt,
-      updatedAt: data?.updatedAt,
+      email: userData?.email || '',
+      displayName: userData?.displayName || '',
+      photoURL: userData?.photoURL || null,
+      bio: userData?.bio || null,
+      templeId: userData?.templeId || null,
+      createdAt: userData?.createdAt,
+      updatedAt: userData?.updatedAt,
+      // Add admin status from admin collection
+      isAdmin: adminData?.isAdmin || false,
+      isSuperAdmin: adminData?.isSuperAdmin || false,
     };
 
     return NextResponse.json({ profile });
@@ -76,10 +83,15 @@ export async function PATCH(request: Request) {
     const data = await request.json();
     const userRef = adminDb.collection('users').doc(decodedToken.uid);
 
-    await userRef.update({
-      ...data,
+    // Only update allowed user profile fields
+    const updateData = {
+      displayName: data.displayName,
+      photoURL: data.photoURL,
+      bio: data.bio,
       updatedAt: new Date(),
-    });
+    };
+
+    await userRef.update(updateData);
 
     return NextResponse.json({ success: true });
   } catch (error) {

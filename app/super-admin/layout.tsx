@@ -20,12 +20,19 @@ export default function SuperAdminLayout({
   useEffect(() => {
     async function checkSuperAdminStatus() {
       if (!user) {
+        console.log('No user found, redirecting...');
         setChecking(false);
         return;
       }
 
       try {
+        // Force token refresh before checking super admin status
+        await user.getIdToken(true);
+        console.log('Token refreshed, checking super admin status...');
+        
         const adminStatus = await isSuperAdmin(user.uid);
+        console.log('Super admin status:', adminStatus);
+        
         setIsAdmin(adminStatus);
         if (!adminStatus) {
           toast({
@@ -33,6 +40,7 @@ export default function SuperAdminLayout({
             title: 'Access Denied',
             description: 'You do not have super admin permissions',
           });
+          console.log('Access denied, user is not super admin');
         }
       } catch (error) {
         console.error('Error checking super admin status:', error);
@@ -52,6 +60,12 @@ export default function SuperAdminLayout({
 
   useEffect(() => {
     if (!loading && !checking && (!user || !isAdmin)) {
+      console.log('Redirecting to home, conditions:', {
+        loading,
+        checking,
+        hasUser: !!user,
+        isAdmin
+      });
       router.push('/');
     }
   }, [user, loading, checking, isAdmin, router]);

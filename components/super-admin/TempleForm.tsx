@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { createTemple } from '@/lib/db/temples';
+import { createTemple, updateTempleDetails } from '@/lib/db/temples';
 import { useAuth } from '@/contexts/AuthContext';
 import { X } from 'lucide-react';
 
@@ -51,13 +51,34 @@ export function TempleForm({ onClose, onSuccess }: TempleFormProps) {
 
     setIsLoading(true);
     try {
-      await createTemple(user.uid, values);
+      // Force token refresh before creating temple
+      await user.getIdToken(true);
+      console.log('Token refreshed, creating temple...');
+
+      // First create the temple with required fields only
+      const templeId = await createTemple(user.uid, {
+        name: values.name,
+        location: values.location,
+      });
+
+      console.log('Temple created successfully:', templeId);
+
+      // If description is provided, update the temple with additional details
+      if (values.description) {
+        console.log('Updating temple with description...');
+        await updateTempleDetails(templeId, {
+          description: values.description,
+        });
+        console.log('Temple description updated successfully');
+      }
+
       toast({
         title: 'Success',
         description: 'Temple has been created successfully',
       });
       onSuccess();
     } catch (error) {
+      console.error('Error in temple creation:', error);
       toast({
         variant: 'destructive',
         title: 'Error',

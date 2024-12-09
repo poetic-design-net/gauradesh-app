@@ -14,7 +14,9 @@ import {
   FieldValue,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { auth } from '../firebase';
 import { FirebaseError } from '../firebase-error';
+import { isSuperAdmin } from './admin';
 
 const TEMPLES_COLLECTION = 'temples';
 const TEMPLE_ADMINS_COLLECTION = 'temple_admins';
@@ -37,11 +39,14 @@ export interface TempleNews {
 
 export type TempleProgram = Record<DayOfWeek, DailyProgram[]>;
 
-export interface Temple {
-  id: string;
+// Interface for data stored in Firestore
+interface TempleData {
   name: string;
-  location: string;
   description?: string;
+  location: string; // Changed from address to location
+  phone?: string;
+  email?: string;
+  website?: string;
   aboutImageUrl?: string;
   logoUrl?: string;
   dailyPrograms?: TempleProgram;
@@ -53,12 +58,16 @@ export interface Temple {
     telefon?: string;
     gmaps?: string;
   };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
+  createdAt: Timestamp | FieldValue;
+  updatedAt: Timestamp | FieldValue;
 }
 
-export interface TempleUpdateData extends Partial<Omit<Temple, 'createdAt' | 'updatedAt'>> {
+// Interface for temple with ID (used in the application)
+export interface Temple extends TempleData {
+  id: string;
+}
+
+export interface TempleUpdateData extends Partial<Omit<TempleData, 'createdAt' | 'updatedAt'>> {
   updatedAt?: FieldValue;
 }
 
@@ -79,44 +88,88 @@ export interface TempleMember {
   updatedAt: Timestamp;
 }
 
+// Only superadmin can create temples
 export async function createTemple(
   userId: string,
-  data: Partial<Temple>
-): Promise<Temple> {
+  data: { name: string; location: string; description?: string }
+): Promise<string> {
   try {
-    const templeRef = doc(collection(db, TEMPLES_COLLECTION));
-    const templeData: Temple = {
-      id: templeRef.id,
-      name: data.name || '',
-      location: data.location || '',
-      description: data.description,
-      aboutImageUrl: data.aboutImageUrl,
-      logoUrl: data.logoUrl,
-      dailyPrograms: data.dailyPrograms || {
-        monday: [],
-        tuesday: [],
-        wednesday: [],
-        thursday: [],
-        friday: [],
-        saturday: [],
-        sunday: []
-      },
-      news: data.news,
-      socialMedia: data.socialMedia || {},
-      createdAt: serverTimestamp() as Timestamp,
-      updatedAt: serverTimestamp() as Timestamp,
-      createdBy: userId,
-    };
+    console.log('Creating temple with data:', data);
 
-    await setDoc(templeRef, templeData);
-    
-    // Add creator as admin
-    await assignTempleAdmin(templeRef.id, userId);
-    
-    return templeData;
+    // Get the current user's token
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      throw new FirebaseError('unauthenticated', 'User must be authenticated');
+    }
+
+    // Call the API endpoint to create temple
+    const response = await fetch('/api/temples/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: data.name,
+        location: data.location
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new FirebaseError(
+        response.status === 403 ? 'permission-denied' : 'unknown',
+        errorData.error || 'Failed to create temple'
+      );
+    }
+
+    const result = await response.json();
+    const templeId = result.templeId;
+
+    // If description is provided, update it separately
+    if (data.description) {
+      await updateTempleDetails(templeId, {
+        description: data.description
+      });
+    }
+
+    return templeId;
   } catch (error) {
     console.error('Error creating temple:', error);
+    if (error instanceof FirebaseError) throw error;
     throw new FirebaseError('unknown', 'Failed to create temple');
+  }
+}
+
+// Temple admins can update temple details
+export async function updateTempleDetails(
+  templeId: string,
+  data: {
+    description?: string;
+    aboutImageUrl?: string;
+    logoUrl?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    dailyPrograms?: TempleProgram;
+    socialMedia?: {
+      instagram?: string;
+      facebook?: string;
+      website?: string;
+      telefon?: string;
+      gmaps?: string;
+    };
+  }
+): Promise<void> {
+  try {
+    const templeRef = doc(db, TEMPLES_COLLECTION, templeId);
+    await setDoc(templeRef, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error updating temple details:', error);
+    throw new FirebaseError('unknown', 'Failed to update temple details');
   }
 }
 
@@ -145,7 +198,10 @@ export async function getAllTemples(): Promise<Temple[]> {
     console.log('Fetching all temples...');
     const templesRef = collection(db, TEMPLES_COLLECTION);
     const snapshot = await getDocs(templesRef);
-    const temples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Temple));
+    const temples = snapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id,
+    } as Temple));
     console.log('Temples fetched:', temples);
     return temples;
   } catch (error) {
@@ -163,7 +219,10 @@ export async function getTemple(templeId: string): Promise<Temple> {
       throw new FirebaseError('not-found', 'Temple not found');
     }
     
-    return { id: templeDoc.id, ...templeDoc.data() } as Temple;
+    return {
+      ...templeDoc.data(),
+      id: templeDoc.id,
+    } as Temple;
   } catch (error) {
     console.error('Error fetching temple:', error);
     if (error instanceof FirebaseError) throw error;
@@ -171,24 +230,14 @@ export async function getTemple(templeId: string): Promise<Temple> {
   }
 }
 
-export async function updateTemple(
-  templeId: string,
-  data: TempleUpdateData
-): Promise<void> {
+// Only superadmin can delete temples
+export async function deleteTemple(templeId: string, userId: string): Promise<void> {
   try {
-    const templeRef = doc(db, TEMPLES_COLLECTION, templeId);
-    await setDoc(templeRef, {
-      ...data,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  } catch (error) {
-    console.error('Error updating temple:', error);
-    throw new FirebaseError('unknown', 'Failed to update temple');
-  }
-}
+    const superAdmin = await isSuperAdmin(userId);
+    if (!superAdmin) {
+      throw new FirebaseError('permission-denied', 'Only superadmins can delete temples');
+    }
 
-export async function deleteTemple(templeId: string): Promise<void> {
-  try {
     await deleteDoc(doc(db, TEMPLES_COLLECTION, templeId));
   } catch (error) {
     console.error('Error deleting temple:', error);
@@ -280,8 +329,6 @@ export async function assignTempleAdmin(
   try {
     const adminRef = doc(collection(db, TEMPLES_COLLECTION, templeId, TEMPLE_ADMINS_COLLECTION));
     await setDoc(adminRef, {
-      id: adminRef.id,
-      templeId,
       userId,
       role: 'admin',
       createdAt: serverTimestamp(),

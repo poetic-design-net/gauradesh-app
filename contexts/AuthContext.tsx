@@ -105,9 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             displayName,
             templeId,
             photoURL: null,
-            bio: null,
-            isAdmin: false,
-            isSuperAdmin: false,
+            bio: null
           });
           console.log('Profile created successfully');
           router.push('/dashboard');

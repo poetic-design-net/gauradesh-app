@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { isAdmin } from '@/lib/db/admin';
+import { isAdmin, isSuperAdmin } from '@/lib/db/admin';
 import { NavigationLink } from './NavigationLink';
 import { useTempleContext } from '@/contexts/TempleContext';
 import { useNavigation } from '@/contexts/NavigationContext';
@@ -27,7 +27,8 @@ import {
   Facebook,
   Globe,
   Phone,
-  MapPin
+  MapPin,
+  Crown
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -40,6 +41,7 @@ export function Navigation({ onNavigate }: NavigationProps) {
   const { isExpanded, setIsExpanded } = useNavigation();
   const router = useRouter();
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  const [isUserSuperAdmin, setIsUserSuperAdmin] = useState(false);
   const [isUserTempleAdmin, setIsUserTempleAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(true);
 
@@ -48,8 +50,12 @@ export function Navigation({ onNavigate }: NavigationProps) {
       if (user) {
         setAdminLoading(true);
         try {
-          const adminStatus = await isAdmin(user.uid);
+          const [adminStatus, superAdminStatus] = await Promise.all([
+            isAdmin(user.uid),
+            isSuperAdmin(user.uid)
+          ]);
           setIsUserAdmin(adminStatus);
+          setIsUserSuperAdmin(superAdminStatus);
 
           if (currentTemple) {
             const templeAdminStatus = await isTempleAdmin(user.uid, currentTemple.id);
@@ -184,23 +190,36 @@ export function Navigation({ onNavigate }: NavigationProps) {
             <div className="flex items-center justify-center h-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : (isUserAdmin || isUserTempleAdmin) && (
+          ) : (
             <>
-              <NavigationLink
-                icon={ShieldCheck}
-                label="Admin Panel"
-                onClick={() => handleNavigation('/admin')}
-                className="text-blue-600"
-                showLabel={isExpanded}
-              />
-              {currentTemple && (
+              {isUserSuperAdmin && (
                 <NavigationLink
-                  icon={Building}
-                  label="Temple Settings"
-                  onClick={() => handleNavigation('/admin/settings')}
-                  className="text-blue-600"
+                  icon={Crown}
+                  label="Super Admin"
+                  onClick={() => handleNavigation('/super-admin')}
+                  className="text-purple-600"
                   showLabel={isExpanded}
                 />
+              )}
+              {(isUserAdmin || isUserTempleAdmin) && (
+                <>
+                  <NavigationLink
+                    icon={ShieldCheck}
+                    label="Admin Panel"
+                    onClick={() => handleNavigation('/admin')}
+                    className="text-blue-600"
+                    showLabel={isExpanded}
+                  />
+                  {currentTemple && (
+                    <NavigationLink
+                      icon={Building}
+                      label="Temple Settings"
+                      onClick={() => handleNavigation('/admin/settings')}
+                      className="text-blue-600"
+                      showLabel={isExpanded}
+                    />
+                  )}
+                </>
               )}
             </>
           )}

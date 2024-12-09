@@ -7,7 +7,10 @@ import { Timestamp } from 'firebase-admin/firestore';
 interface MemberData extends Omit<TempleMember, 'createdAt' | 'updatedAt'> {
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  profile?: Omit<UserProfile, 'createdAt' | 'updatedAt'>;
+  profile?: Omit<UserProfile, 'createdAt' | 'updatedAt'> & {
+    isAdmin: boolean;
+    isSuperAdmin: boolean;
+  };
 }
 
 export async function GET(request: Request) {
@@ -36,7 +39,7 @@ export async function GET(request: Request) {
       };
     });
 
-    // Get all regular members
+    // Get all regular members from temple_members collection
     const membersSnapshot = await adminDb
       .collection(`temples/${templeId}/temple_members`)
       .get();
@@ -53,28 +56,58 @@ export async function GET(request: Request) {
       };
     });
 
-    // Get user profiles for all members
-    const allMembers = [...adminMembers, ...regularMembers];
-    const userIds = Array.from(new Set(allMembers.map(member => member.userId)));
+    // Get users who have this templeId in their profile but are not in temple_members
+    const usersWithTempleSnapshot = await adminDb
+      .collection('users')
+      .where('templeId', '==', templeId)
+      .get();
+
+    // Create a Set of existing member userIds for quick lookup
+    const existingMemberIds = new Set([
+      ...adminMembers.map(m => m.userId),
+      ...regularMembers.map(m => m.userId)
+    ]);
+
+    // Filter out users who are already in temple_members
+    const additionalMembers = usersWithTempleSnapshot.docs
+      .filter(doc => !existingMemberIds.has(doc.id))
+      .map(doc => ({
+        id: doc.id,
+        templeId,
+        userId: doc.id,
+        role: 'member' as const,
+        createdAt: doc.data().createdAt || Timestamp.now(),
+        updatedAt: doc.data().updatedAt || Timestamp.now()
+      }));
+
+    // Combine all unique members
+    const allMembers = [...adminMembers, ...regularMembers, ...additionalMembers];
     
+    // Get user profiles for all members
     try {
       const userProfiles = await Promise.all(
-        userIds.map(async (userId) => {
+        allMembers.map(async (member) => {
           try {
-            const userDoc = await adminDb.collection('users').doc(userId).get();
+            // Get user profile
+            const userDoc = await adminDb.collection('users').doc(member.userId).get();
+            // Get admin status from admin collection
+            const adminDoc = await adminDb.collection('admin').doc(member.userId).get();
+            const adminData = adminDoc.exists ? adminDoc.data() : null;
+
             if (!userDoc.exists) {
-              console.warn(`User profile not found for userId: ${userId}`);
+              console.warn(`User profile not found for userId: ${member.userId}`);
               return {
-                uid: userId,
+                uid: member.userId,
                 email: null,
                 displayName: 'Unknown User',
                 photoURL: null,
                 bio: null,
+                templeId: null,
                 isAdmin: false,
-                isSuperAdmin: false,
-                templeId: null
+                isSuperAdmin: false
               };
             }
+
             const userData = userDoc.data() as UserProfile;
             return {
               uid: userData.uid,
@@ -82,22 +115,21 @@ export async function GET(request: Request) {
               displayName: userData.displayName,
               photoURL: userData.photoURL,
               bio: userData.bio,
-              isAdmin: userData.isAdmin,
-              isSuperAdmin: userData.isSuperAdmin,
-              templeId: userData.templeId
+              templeId: userData.templeId,
+              isAdmin: adminData?.isAdmin || false,
+              isSuperAdmin: adminData?.isSuperAdmin || false
             };
           } catch (error) {
-            console.error(`Error fetching user profile for userId: ${userId}`, error);
-            // Return a placeholder profile instead of failing the whole request
+            console.error(`Error fetching user profile for userId: ${member.userId}`, error);
             return {
-              uid: userId,
+              uid: member.userId,
               email: null,
               displayName: 'Error Loading User',
               photoURL: null,
               bio: null,
+              templeId: null,
               isAdmin: false,
-              isSuperAdmin: false,
-              templeId: null
+              isSuperAdmin: false
             };
           }
         })
@@ -109,6 +141,25 @@ export async function GET(request: Request) {
         profile: userProfiles.find(profile => profile.uid === member.userId)
       }));
 
+      // For users found through templeId in their profile, also add them to temple_members collection
+      if (additionalMembers.length > 0) {
+        const batch = adminDb.batch();
+        for (const member of additionalMembers) {
+          const memberRef = adminDb
+            .collection(`temples/${templeId}/temple_members`)
+            .doc();
+          batch.set(memberRef, {
+            id: memberRef.id, // Include the document ID
+            templeId,        // Include the temple ID
+            userId: member.userId,
+            role: 'member',
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+        }
+        await batch.commit();
+      }
+
       return NextResponse.json({ members: enrichedMembers });
     } catch (error: any) {
       console.error('Error enriching members with profiles:', {
@@ -118,7 +169,6 @@ export async function GET(request: Request) {
         memberCount: allMembers.length
       });
       
-      // Return basic member data without profiles rather than failing
       return NextResponse.json({ 
         members: allMembers,
         warning: 'Failed to load some user profiles'
