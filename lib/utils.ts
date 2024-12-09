@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { Timestamp } from "firebase/firestore";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -26,4 +27,17 @@ export function serializeData(data: any): any {
   }
   
   return data;
+}
+
+export function formatFirebaseTimestamp(timestamp: Timestamp | null | undefined): string {
+  if (!timestamp || !timestamp.toDate) {
+    return '';
+  }
+
+  const date = timestamp.toDate();
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }).format(date);
 }
