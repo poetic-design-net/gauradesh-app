@@ -11,94 +11,80 @@ import { cn } from '@/lib/utils';
 import { Flower2, X, Menu } from 'lucide-react';
 import { HeaderActions } from '@/components/layout/HeaderActions';
 
-export function Header() {
-  const { user, logout } = useAuth();
-  const { currentTemple } = useTempleContext();
-  const { isExpanded, setIsExpanded } = useNavigation();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-  const closeMenu = () => setIsMenuOpen(false);
-
+function HeaderSkeleton() {
   return (
-    <div className="sticky top-0 z-50 w-full bg-background border-b">
+    <header className="sticky top-0 z-50 w-full bg-background border-b">
       <div className="container mx-auto">
         <div className="h-14 flex items-center">
-          {/* Menu Button for authenticated users */}
-          {user && (
-            <button
-              onClick={() => setIsExpanded(true)}
-              className="md:hidden px-4 h-14 hover:bg-accent/50 flex items-center justify-center"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          )}
+          <div className="flex items-center space-x-2">
+            <div className="relative h-12 w-12 bg-accent/10 rounded-full animate-pulse" />
+            <div className="h-6 w-48 bg-accent/10 rounded animate-pulse hidden sm:block" />
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export function Header() {
+  const { user } = useAuth();
+  const { currentTemple, loading } = useTempleContext();
+  const { isExpanded, setIsExpanded } = useNavigation();
+
+  if (loading) {
+    return <HeaderSkeleton />;
+  }
+
+  // Don't render header if user is not logged in
+  if (!user) {
+    return null;
+  }
+
+  // Pre-render the temple name for faster LCP
+  const templeName = currentTemple?.name || '🕉️ ISKCON Connect';
+
+  return (
+    <header className="sticky top-0 z-50 w-full bg-background border-b">
+      <div className="container mx-auto">
+        <div className="h-14 flex items-center">
+          {/* Menu Button */}
+          <button
+            onClick={() => setIsExpanded(true)}
+            className="md:hidden px-4 h-14 hover:bg-accent/50 flex items-center justify-center"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
           {/* Left side - Logo and Title */}
           <Link 
             href="/" 
             className="flex items-center space-x-2 font-bold hover:opacity-90 transition-opacity"
-            onClick={closeMenu}
           >
-            {currentTemple?.logoUrl ? (
-              <div className="relative h-12 w-12">
+            <div className="relative h-12 w-12 flex items-center justify-center">
+              {currentTemple?.logoUrl ? (
                 <Image
                   src={currentTemple.logoUrl}
-                  alt={currentTemple.name}
+                  alt={templeName}
                   fill
+                  priority
+                  sizes="48px"
                   className="object-contain"
                 />
-              </div>
-            ) : (
-              <Flower2 className="h-6 w-6" />
-            )}
-            <span className="text-lg hidden sm:inline-block">
-              {currentTemple?.name}
-            </span>
+              ) : (
+                <Flower2 className="h-6 w-6" />
+              )}
+            </div>
+            <h1 className="text-lg hidden sm:inline-block font-bold">
+              {templeName}
+            </h1>
           </Link>
 
           {/* Right side - Actions */}
           <div className="flex items-center space-x-2 ml-auto">
-            {user ? (
-              <HeaderActions />
-            ) : (
-              <>
-                <button
-                  className="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors"
-                  onClick={toggleMenu}
-                  aria-label="Toggle menu"
-                >
-                  {isMenuOpen ? (
-                    <X className="h-5 w-5" />
-                  ) : null}
-                </button>
-              </>
-            )}
+            <HeaderActions />
           </div>
         </div>
       </div>
-
-      {/* Mobile Navigation - Only for non-authenticated users */}
-      {!user && (
-        <nav className={cn(
-          "fixed inset-0 top-14 z-50 bg-background transition-transform duration-200 ease-in-out",
-          isMenuOpen ? "translate-x-0" : "translate-x-full"
-        )}>
-          <div className="container py-4">
-            <Link href="/auth" onClick={closeMenu}>
-              <Button className="w-full">Sign In</Button>
-            </Link>
-          </div>
-        </nav>
-      )}
-
-      {/* Overlay */}
-      {isMenuOpen && (
-        <div 
-          className="fixed inset-0 top-14 z-40 bg-black/50"
-          onClick={closeMenu}
-        />
-      )}
-    </div>
+    </header>
   );
 }

@@ -37,7 +37,7 @@ export function MainContent({ children }: { children: React.ReactNode }) {
         ${!isAuthPage ? 'min-h-screen' : ''}
       `}
     >
-      <Header />
+      {user && <Header />}
       
       <main className={`
         flex-1 

@@ -90,10 +90,15 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid;
     }
 
-    // Root admin collection
+    // Root admin collection - Allow initial creation during signup
     match /admin/{adminId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (
+      allow create: if request.auth != null && 
+        request.auth.uid == adminId &&
+        request.resource.data.keys().hasAll(['isAdmin', 'isSuperAdmin', 'templeId', 'createdAt', 'updatedAt']) &&
+        request.resource.data.isAdmin == false &&
+        request.resource.data.isSuperAdmin == false;
+      allow update: if isAuthenticated() && (
         request.auth.uid == adminId || 
         isSuperAdmin()
       );
@@ -108,20 +113,17 @@ service cloud.firestore {
       );
     }
 
+    // Users collection - Allow initial creation during signup
     match /users/{userId} {
       // Allow reading user profiles
       allow read: if isAuthenticated();
       
-      // Allow creating own profile with all necessary fields
+      // Allow creating own profile during signup
       allow create: if request.auth != null && 
         request.auth.uid == userId &&
         request.resource.data.keys().hasAll([
-          'uid', 'email', 'displayName', 'photoURL', 'bio',
-          'templeId', 'createdAt', 'updatedAt'
-        ]) &&
-        request.resource.data.keys().hasOnly([
-          'uid', 'email', 'displayName', 'photoURL', 'bio',
-          'templeId', 'createdAt', 'updatedAt'
+          'uid', 'email', 'displayName', 'templeId',
+          'createdAt', 'updatedAt'
         ]) &&
         request.resource.data.uid == userId;
       

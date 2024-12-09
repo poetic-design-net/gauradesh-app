@@ -3,6 +3,7 @@ import { TempleAboutPage } from '@/components/temples/TempleAboutPage';
 import { adminDb } from '@/lib/firebase-admin';
 import { Temple } from '@/lib/db/temples';
 import { headers } from 'next/headers';
+import { serializeData } from '@/lib/utils';
 
 interface AboutPageProps {
   params: {
@@ -17,10 +18,11 @@ async function getTempleData(templeId: string): Promise<Temple> {
     throw new Error('Temple not found');
   }
 
-  return {
+  const data = templeDoc.data();
+  return serializeData({
     id: templeDoc.id,
-    ...templeDoc.data()
-  } as Temple;
+    ...data
+  }) as Temple;
 }
 
 async function getInitialMembers(templeId: string) {
@@ -37,7 +39,8 @@ async function getInitialMembers(templeId: string) {
     throw new Error('Failed to fetch temple members');
   }
 
-  return response.json();
+  const data = await response.json();
+  return { members: data.members }; // Data is already serialized by the API
 }
 
 export default async function AboutPage({ params }: AboutPageProps) {

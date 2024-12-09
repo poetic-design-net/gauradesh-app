@@ -3,6 +3,7 @@ import { adminDb } from '@/lib/firebase-admin';
 import { TempleMember } from '@/lib/db/temples';
 import { UserProfile } from '@/lib/db/users';
 import { Timestamp } from 'firebase-admin/firestore';
+import { serializeData } from '@/lib/server-utils';
 
 interface MemberData extends Omit<TempleMember, 'createdAt' | 'updatedAt'> {
   createdAt: Timestamp;
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
         })
       );
 
-      // Map user profiles to members
+      // Map user profiles to members and serialize the data
       const enrichedMembers = allMembers.map(member => ({
         ...member,
         profile: userProfiles.find(profile => profile.uid === member.userId)
@@ -149,8 +150,8 @@ export async function GET(request: Request) {
             .collection(`temples/${templeId}/temple_members`)
             .doc();
           batch.set(memberRef, {
-            id: memberRef.id, // Include the document ID
-            templeId,        // Include the temple ID
+            id: memberRef.id,
+            templeId,
             userId: member.userId,
             role: 'member',
             createdAt: Timestamp.now(),
@@ -160,7 +161,10 @@ export async function GET(request: Request) {
         await batch.commit();
       }
 
-      return NextResponse.json({ members: enrichedMembers });
+      // Serialize the data before sending it to the client
+      return NextResponse.json({ 
+        members: serializeData(enrichedMembers)
+      });
     } catch (error: any) {
       console.error('Error enriching members with profiles:', {
         error: error.message,
@@ -170,7 +174,7 @@ export async function GET(request: Request) {
       });
       
       return NextResponse.json({ 
-        members: allMembers,
+        members: serializeData(allMembers),
         warning: 'Failed to load some user profiles'
       });
     }

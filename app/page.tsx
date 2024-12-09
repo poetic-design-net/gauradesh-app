@@ -14,7 +14,7 @@ import Image from 'next/image';
 // Pre-render this component outside of auth state
 const TempleName = () => (
   <h1 className="text-4xl font-bold text-white">
-    🕉️ Sri Sri Radha Krishna Temple
+     Welcome!
   </h1>
 );
 
@@ -93,7 +93,7 @@ export default function Home() {
                     <HeartHandshake className="h-8 w-8 text-purple-400" />
                     <ArrowRight className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">Temple Services</h3>
+                  <h3 className="text-xl font-semibold text-white mb-2">Services</h3>
                   <p className="text-gray-300 text-sm">Explore and register for various temple services</p>
                 </button>
               </Card>
@@ -122,8 +122,8 @@ export default function Home() {
                       <FileText className="h-8 w-8 text-blue-400" />
                       <ArrowRight className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">About Temple</h3>
-                    <p className="text-gray-300 text-sm">Learn more about our temple and its activities</p>
+                    <h3 className="text-xl font-semibold text-white mb-2">About</h3>
+                    <p className="text-gray-300 text-sm">Learn more about our community and its activities</p>
                   </button>
                 </Card>
               )}

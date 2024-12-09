@@ -9,9 +9,11 @@ import {
   onAuthStateChanged,
   updateProfile,
   deleteUser,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { createUserProfile } from '../lib/db/users';
+import { createUserProfile, getUserProfile } from '../lib/db/users';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
@@ -20,6 +22,7 @@ interface AuthContextType {
   initialized: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string, templeId: string) => Promise<void>;
+  signInWithGoogle: (templeId: string, isSignUp?: boolean) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -72,9 +75,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       console.log('Attempting sign in...');
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/dashboard');
     } catch (error) {
       console.error('Sign in error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithGoogle = async (templeId: string, isSignUp: boolean = false) => {
+    try {
+      setLoading(true);
+      console.log('Attempting Google sign in...');
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Only attempt to create profile if this is a sign-up and we have a templeId
+      if (isSignUp && templeId) {
+        try {
+          // First check if user profile already exists
+          const existingProfile = await getUserProfile(user.uid);
+          if (!existingProfile.templeId) {
+            // Only create profile if one doesn't exist or doesn't have a templeId
+            await createUserProfile(user.uid, {
+              uid: user.uid,
+              email: user.email!,
+              displayName: user.displayName!,
+              templeId,
+              photoURL: user.photoURL,
+              bio: null
+            });
+            console.log('Profile created for Google user');
+          }
+        } catch (profileError: any) {
+          console.error('Error handling user profile:', profileError);
+          // Clean up auth user if profile creation fails
+          await deleteUser(user);
+          throw profileError;
+        }
+      }
+    } catch (error) {
+      console.error('Google sign in error:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -108,7 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             bio: null
           });
           console.log('Profile created successfully');
-          router.push('/dashboard');
           return;
         } catch (error) {
           console.error(`Failed to create profile, retries left: ${retries}`, error);
@@ -166,7 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, initialized, signIn, signUp, logout }}>
+    <AuthContext.Provider value={{ user, loading, initialized, signIn, signUp, signInWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

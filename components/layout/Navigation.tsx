@@ -171,7 +171,7 @@ export function Navigation({ onNavigate }: NavigationProps) {
               />
               <NavigationLink
                 icon={Home}
-                label="About Temple"
+                label="About"
                 onClick={() => handleNavigation(`/temples/${currentTemple.id}/about`)}
                 className="text-primary hover:text-primary/90"
                 showLabel={isExpanded}

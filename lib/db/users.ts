@@ -44,8 +44,6 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
         uid,
         email: data.email || '',
         displayName: data.displayName || '',
-        photoURL: null,
-        bio: null,
         templeId: data.templeId || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -126,14 +124,22 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
       return createUserProfile(uid, data);
     }
 
-    // Only include fields that are allowed to be updated
-    const updateData = {
-      displayName: data.displayName,
-      photoURL: data.photoURL,
+    // Only include fields that are actually provided in the update
+    const updateData: Record<string, any> = {
       updatedAt: serverTimestamp(),
     };
 
-    console.log('Updating existing profile');
+    if (data.displayName !== undefined) {
+      updateData.displayName = data.displayName;
+    }
+    if (data.photoURL !== undefined) {
+      updateData.photoURL = data.photoURL;
+    }
+    if (data.bio !== undefined) {
+      updateData.bio = data.bio;
+    }
+
+    console.log('Updating existing profile with data:', updateData);
     await updateDoc(userRef, updateData);
     console.log('Profile updated successfully');
     return { ...updateData, uid };
