@@ -14,6 +14,12 @@ export interface ServiceType {
   updatedAt: Timestamp;
 }
 
+export interface ServiceParticipant {
+  userId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  joinedAt: Timestamp;
+}
+
 export interface Service {
   id: string;
   templeId: string;
@@ -23,6 +29,7 @@ export interface Service {
   maxParticipants: number;
   currentParticipants: number;
   pendingParticipants: number;
+  participants?: ServiceParticipant[];
   date: Timestamp;
   timeSlot: {
     start: string;
