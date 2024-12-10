@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
 import { formatFirebaseTimestamp } from '@/lib/utils';
+import { getUserProfile, UserProfile } from '@/lib/db/users';
 
 function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
   const variants: Record<ServiceRegistration['status'], string> = {
@@ -28,9 +29,30 @@ export default function ServicesPage() {
   const [registrations, setRegistrations] = useState<ServiceRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    if (!user) {
+    async function fetchUserProfile() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const profile = await getUserProfile(user.uid);
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        setError('Failed to load user profile');
+        setLoading(false);
+      }
+    }
+
+    fetchUserProfile();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !userProfile?.templeId) {
       setLoading(false);
       return;
     }
@@ -41,6 +63,7 @@ export default function ServicesPage() {
     // Subscribe to real-time updates
     const unsubscribe = subscribeToUserRegistrations(
       user.uid,
+      userProfile.templeId,
       (updatedRegistrations: ServiceRegistration[]) => {
         // Sort registrations by date, most recent first
         const sortedRegistrations = [...updatedRegistrations].sort((a, b) => 
@@ -60,7 +83,7 @@ export default function ServicesPage() {
     return () => {
       unsubscribe();
     };
-  }, [user]);
+  }, [user, userProfile]);
 
   if (loading) {
     return null; // Return nothing while loading instead of skeleton
@@ -84,6 +107,18 @@ export default function ServicesPage() {
         <CardContent className="pt-6">
           <p className="text-center text-muted-foreground">
             Please sign in to view your services.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!userProfile?.templeId) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-center text-muted-foreground">
+            Please select a temple to view your services.
           </p>
         </CardContent>
       </Card>
