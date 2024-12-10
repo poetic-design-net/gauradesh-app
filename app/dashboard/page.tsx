@@ -6,23 +6,27 @@ import { DashboardStats } from './components/DashboardStats';
 import { DashboardActions } from './components/DashboardActions';
 import { DashboardServices } from './components/DashboardServices';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTempleContext } from '@/contexts/TempleContext';
 import { useEffect, useState } from 'react';
-import { getUserProfile } from '@/lib/db/users';
-import { getTemple } from '@/lib/db/temples';
+import { getUserProfile, UserProfile } from '@/lib/db/users';
 import { isAdmin } from '@/lib/db/admin';
-import { getUserServiceRegistrations, getService } from '@/lib/db/services';
+import { ServiceRegistration, Service } from '@/lib/db/services/types';
 import { useRouter } from 'next/navigation';
 import { Activity } from 'lucide-react';
 
+interface EnrichedRegistration extends ServiceRegistration {
+  service?: Service;
+}
+
 interface DashboardData {
-  profile: any;
+  profile: UserProfile;
   isAdmin: boolean;
-  registrations: any[];
-  temple: any;
+  registrations: EnrichedRegistration[];
 }
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { currentTemple } = useTempleContext();
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,40 +40,17 @@ export default function DashboardPage() {
       }
 
       try {
-        // Load initial data in parallel
-        const [profile, adminStatus, userRegistrations] = await Promise.all([
+        const [profile, adminStatus] = await Promise.all([
           getUserProfile(user.uid),
-          isAdmin(user.uid),
-          getUserServiceRegistrations(user.uid)
+          isAdmin(user.uid)
         ]);
-
-        // Get temple data if user has a temple
-        let temple = null;
-        if (profile?.templeId) {
-          temple = await getTemple(profile.templeId);
-        }
-
-        // Get initial service data for each registration
-        const enrichedRegistrations = await Promise.all(
-          userRegistrations.map(async (reg) => {
-            try {
-              const service = await getService(reg.serviceId, reg.templeId);
-              return { ...reg, service };
-            } catch (error) {
-              console.error(`Error loading service ${reg.serviceId}:`, error);
-              return reg;
-            }
-          })
-        );
 
         setData({
           profile,
           isAdmin: adminStatus,
-          registrations: enrichedRegistrations,
-          temple
+          registrations: [], // Initial empty array, will be populated by subscription
         });
       } catch (error) {
-        console.error('Error loading dashboard data:', error);
         setError('Failed to load dashboard data');
       } finally {
         setLoading(false);
@@ -115,12 +96,12 @@ export default function DashboardPage() {
       <DashboardStats 
         profile={data.profile}
         registrations={data.registrations}
-        temple={data.temple}
+        temple={currentTemple}
       />
 
       <Suspense>
         <DashboardActions 
-          temple={data.temple}
+          temple={currentTemple}
           isAdmin={data.isAdmin}
         />
       </Suspense>
@@ -128,7 +109,7 @@ export default function DashboardPage() {
       <Suspense>
         <DashboardServices 
           initialRegistrations={data.registrations}
-          templeId={data.temple?.id}
+          templeId={currentTemple?.id}
           userId={user.uid}
         />
       </Suspense>

@@ -6,30 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
 import { Activity, Bell, ChevronRight, X } from 'lucide-react';
-import { ServiceRegistration } from '@/lib/db/services';
+import { Service, ServiceRegistration } from '@/lib/db/services/types';
 import { subscribeToTempleServices } from '@/lib/db/services/services-optimized';
 import { deleteRegistration } from '@/lib/db/services/registrations';
 import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
-
-interface ServiceData {
-  id: string;
-  name: string;
-  type: string;
-  maxParticipants: number;
-  currentParticipants: number;
-  pendingParticipants: number;
-  date: any;
-  timeSlot: { start: string; end: string };
-  contactPerson: { name: string; phone: string };
-  notes: string | null;
-  createdAt: any;
-  updatedAt: any;
-  createdBy: string;
-}
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface EnrichedRegistration extends ServiceRegistration {
-  service?: ServiceData;
+  service?: Service;
 }
 
 interface DashboardServicesProps {
@@ -55,19 +41,49 @@ function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
 export function DashboardServices({ initialRegistrations, templeId, userId }: DashboardServicesProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [registrations, setRegistrations] = useState(initialRegistrations);
-  const [services, setServices] = useState<Record<string, ServiceData>>({});
+  const [registrations, setRegistrations] = useState<EnrichedRegistration[]>(initialRegistrations);
+  const [services, setServices] = useState<Record<string, Service>>({});
+
+  // Subscribe to user's registrations
+  useEffect(() => {
+    if (!userId || !templeId) {
+      return;
+    }
+
+    const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
+    const q = query(registrationsRef, where('userId', '==', userId));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const newRegistrations = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as EnrichedRegistration[];
+        
+        setRegistrations(newRegistrations);
+      },
+      (error) => {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to load your service registrations'
+        });
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userId, templeId, toast]);
 
   // Subscribe to services updates
   useEffect(() => {
     if (!templeId) {
-      // If no templeId, use the initial service data from registrations
       const servicesMap = registrations.reduce((acc, reg) => {
         if (reg.service) {
           acc[reg.serviceId] = reg.service;
         }
         return acc;
-      }, {} as Record<string, ServiceData>);
+      }, {} as Record<string, Service>);
       setServices(servicesMap);
       return;
     }
@@ -75,11 +91,10 @@ export function DashboardServices({ initialRegistrations, templeId, userId }: Da
     const unsubscribe = subscribeToTempleServices(
       templeId,
       (updatedServices) => {
-        // Create a map of services for quick lookup
         const servicesMap = updatedServices.reduce((acc, service) => {
           acc[service.id] = service;
           return acc;
-        }, {} as Record<string, ServiceData>);
+        }, {} as Record<string, Service>);
 
         setServices(servicesMap);
       },
@@ -110,7 +125,6 @@ export function DashboardServices({ initialRegistrations, templeId, userId }: Da
         description: 'Successfully unregistered from the service',
       });
     } catch (error: any) {
-      console.error('Error unregistering:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -149,30 +163,28 @@ export function DashboardServices({ initialRegistrations, templeId, userId }: Da
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className="rounded-full bg-gradient-to-br from-primary/20 to-primary/10 p-2 transition-transform group-hover:scale-110">
-                        <ServiceIcon name={reg.service?.type} className="h-4 w-4" />
+                        <ServiceIcon name={reg.serviceType} className="h-4 w-4" />
                       </div>
                       <div>
                         <h3 className="font-medium transition-colors group-hover:text-primary">
-                          {reg.service?.name ?? 'Unknown Service'}
+                          {reg.serviceName}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          Registered on {reg.createdAt.toDate().toLocaleDateString()}
+                          {reg.serviceDate.toDate().toLocaleDateString()} at {reg.serviceTimeSlot.start}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <StatusBadge status={reg.status} />
-                      {reg.status === 'approved' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleUnregister(reg)}
-                          className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
-                        >
-                          <X className="h-4 w-4" />
-                          <span className="ml-2">Unregister</span>
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleUnregister(reg)}
+                        className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                      >
+                        <X className="h-4 w-4" />
+                        <span className="ml-2">Unregister</span>
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

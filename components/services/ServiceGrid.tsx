@@ -2,7 +2,7 @@
 
 import { Service } from '@/lib/db/services/types';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
-import { HeartHandshake, Edit, User, Phone, Clock, Calendar, Users } from 'lucide-react';
+import { HeartHandshake, Edit, User, Phone, Clock, Calendar, Users, CheckCircle2, XCircle, Clock3, Ban } from 'lucide-react';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useState } from 'react';
@@ -72,18 +72,18 @@ export function ServiceGrid({
     return status === 'pending' || status === 'rejected' || service.currentParticipants >= service.maxParticipants;
   };
 
-  const getRegistrationButtonText = (service: Service) => {
+  const getRegistrationIcon = (service: Service) => {
     const status = getRegistrationStatus(service.id);
-    if (status === 'approved') return 'Unregister';
-    if (status === 'pending') return 'Pending';
-    if (status === 'rejected') return 'Rejected';
-    if (service.currentParticipants >= service.maxParticipants) return 'Full';
-    return 'Register';
+    if (status === 'approved') return <XCircle className="h-4 w-4" />;
+    if (status === 'pending') return <Clock3 className="h-4 w-4" />;
+    if (status === 'rejected') return <Ban className="h-4 w-4" />;
+    if (service.currentParticipants >= service.maxParticipants) return <Ban className="h-4 w-4" />;
+    return <CheckCircle2 className="h-4 w-4" />;
   };
 
   const getRegistrationButtonClass = (service: Service) => {
     const status = getRegistrationStatus(service.id);
-    const baseClass = "ml-4 px-4 py-2 rounded-md transition-colors";
+    const baseClass = "ml-4 px-4 py-2 rounded-md transition-colors flex items-center gap-2";
     
     if (status === 'approved') return `${baseClass} bg-red-500/20 text-red-300 hover:bg-red-500/30`;
     if (status === 'pending') return `${baseClass} bg-yellow-500/20 text-yellow-300`;
@@ -119,7 +119,6 @@ export function ServiceGrid({
               <div className="grid gap-4">
                 {weekServices.map((service) => {
                   const serviceDate = service.date.toDate();
-                  const registrationStatus = getRegistrationStatus(service.id);
                   
                   return (
                     <div 
@@ -130,7 +129,7 @@ export function ServiceGrid({
                       <div className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4 flex-grow">
-                            <div className="flex flex-col items-center min-w-[80px] p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm">
+                            <div className="flex flex-col items-center min-w-[50px] sm:min-w-[80px] p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm">
                               <span className="text-sm font-medium text-purple-300">
                                 {format(serviceDate, 'EEE')}
                               </span>
@@ -139,13 +138,7 @@ export function ServiceGrid({
                               </span>
                             </div>
                             <div className="flex items-center gap-4 flex-grow">
-                              <div className="p-2 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm">
-                                <ServiceIcon 
-                                  name={service.type} 
-                                  className="h-5 w-5 text-purple-400"
-                                  templeId={service.templeId} 
-                                />
-                              </div>
+                              
                               <div className="flex-grow">
                                 <h4 className="text-white font-medium">{service.name}</h4>
                                 <div className="flex items-center gap-2">
@@ -164,7 +157,17 @@ export function ServiceGrid({
                                 disabled={isRegistrationDisabled(service)}
                                 className={getRegistrationButtonClass(service)}
                               >
-                                {getRegistrationButtonText(service)}
+                                {getRegistrationIcon(service)}
+                                <span className="sr-only">
+                                  {(() => {
+                                    const status = getRegistrationStatus(service.id);
+                                    if (status === 'approved') return 'Unregister';
+                                    if (status === 'pending') return 'Pending';
+                                    if (status === 'rejected') return 'Rejected';
+                                    if (service.currentParticipants >= service.maxParticipants) return 'Full';
+                                    return 'Register';
+                                  })()}
+                                </span>
                               </button>
                             </div>
                           </div>
@@ -269,7 +272,17 @@ export function ServiceGrid({
                   disabled={isRegistrationDisabled(selectedService)}
                   className={getRegistrationButtonClass(selectedService)}
                 >
-                  {getRegistrationButtonText(selectedService)}
+                  {getRegistrationIcon(selectedService)}
+                  <span>
+                    {(() => {
+                      const status = getRegistrationStatus(selectedService.id);
+                      if (status === 'approved') return 'Unregister';
+                      if (status === 'pending') return 'Pending';
+                      if (status === 'rejected') return 'Rejected';
+                      if (selectedService.currentParticipants >= selectedService.maxParticipants) return 'Full';
+                      return 'Register';
+                    })()}
+                  </span>
                 </button>
               )}
             </div>
