@@ -74,11 +74,11 @@ export function ServiceGrid({
 
   const getRegistrationIcon = (service: Service) => {
     const status = getRegistrationStatus(service.id);
-    if (status === 'approved') return <XCircle className="h-4 w-4" />;
-    if (status === 'pending') return <Clock3 className="h-4 w-4" />;
-    if (status === 'rejected') return <Ban className="h-4 w-4" />;
-    if (service.currentParticipants >= service.maxParticipants) return <Ban className="h-4 w-4" />;
-    return <CheckCircle2 className="h-4 w-4" />;
+    if (status === 'approved') return <XCircle className="h-5 w-5" />;
+    if (status === 'pending') return <Clock3 className="h-5 w-5" />;
+    if (status === 'rejected') return <Ban className="h-5 w-5" />;
+    if (service.currentParticipants >= service.maxParticipants) return <Ban className="h-5 w-5" />;
+    return <CheckCircle2 className="h-5 w-5" />;
   };
 
   const getRegistrationButtonClass = (service: Service) => {
@@ -90,7 +90,7 @@ export function ServiceGrid({
     if (status === 'rejected') return `${baseClass} bg-red-500/20 text-red-300`;
     if (service.currentParticipants >= service.maxParticipants) 
       return `${baseClass} bg-gray-500/20 text-gray-300 cursor-not-allowed`;
-    return `${baseClass} bg-purple-500/20 text-purple-300 hover:bg-purple-500/30`;
+    return `${baseClass}  text-white hover:bg-green-500/70`;
   };
 
   const handleRegistrationClick = async (e: React.MouseEvent, service: Service) => {
@@ -127,7 +127,7 @@ export function ServiceGrid({
                       onClick={() => setSelectedService(service)}
                     >
                       <div className="p-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between ">
                           <div className="flex items-center gap-4 flex-grow">
                             <div className="flex flex-col items-center min-w-[50px] sm:min-w-[80px] p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm">
                               <span className="text-sm font-medium text-purple-300">
@@ -143,13 +143,14 @@ export function ServiceGrid({
                                 <h4 className="text-white font-medium">{service.name}</h4>
                                 <div className="flex items-center gap-2">
                                   <p className="text-sm text-gray-400">{service.type}</p>
-                                  <div className="flex items-center gap-1 text-sm text-gray-400">
-                                    <Users className="h-4 w-4" />
-                                    <span>{service.currentParticipants}/{service.maxParticipants}</span>
-                                  </div>
+                       
                                 </div>
                               </div>
-                              <div className="text-right text-sm text-gray-400">
+                              <div className="sm:flex-grow sm:flex-grow-0 text-left text-sm text-white ">
+                            <div className="flex gap-2 py-2 text-gray-400">
+                                    <Users className="h-5 w-5" />
+                                    <span>{service.currentParticipants}/{service.maxParticipants}</span>
+                                </div>
                                 {service.timeSlot.start} - {service.timeSlot.end}
                               </div>
                               <button
@@ -181,7 +182,7 @@ export function ServiceGrid({
                                   }}
                                   className="p-2 rounded-md hover:bg-white/10 transition-colors"
                                 >
-                                  <Edit className="h-4 w-4 text-purple-400" />
+                                  <Edit className="h-5 w-5 text-purple-400" />
                                 </button>
                               )}
                             </div>
@@ -217,15 +218,15 @@ export function ServiceGrid({
                 <h4 className="font-medium text-white">Date & Time</h4>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4" />
+                    <Calendar className="h-5 w-5" />
                     <span>{selectedService && format(selectedService.date.toDate(), 'EEEE, MMMM d, yyyy')}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Clock className="h-4 w-4" />
+                    <Clock className="h-5 w-5" />
                     <span>{selectedService?.timeSlot.start} - {selectedService?.timeSlot.end}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4" />
+                    <Users className="h-5 w-5" />
                     <span>{selectedService?.currentParticipants}/{selectedService?.maxParticipants} participants</span>
                   </div>
                 </div>
@@ -236,12 +237,12 @@ export function ServiceGrid({
                   <h4 className="font-medium text-white">Service Leader</h4>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm">
-                      <User className="h-4 w-4" />
+                      <User className="h-5 w-5" />
                       <span>{selectedService.contactPerson.name}</span>
                     </div>
                     {selectedService.contactPerson.phone && (
                       <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-4 w-4" />
+                        <Phone className="h-5 w-5" />
                         <span>{selectedService.contactPerson.phone}</span>
                       </div>
                     )}
@@ -257,7 +258,7 @@ export function ServiceGrid({
               </div>
             )}
 
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-end pt-4 ">
               {selectedService && (
                 <button
                   onClick={() => {

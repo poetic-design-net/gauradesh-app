@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { ServiceRegistration, SERVICE_REGISTRATIONS_COLLECTION } from '@/lib/db/services/types';
+import { ServiceRegistration } from '@/lib/db/services/types';
 import { deleteRegistration } from '@/lib/db/services/registrations';
 import { getUsersByTemple, UserProfile } from '@/lib/db/users';
 import { updateService } from '@/lib/db/services/services';
@@ -74,7 +74,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
     });
 
     // Check if user is registered for this service
-    const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
+    const registrationsRef = collection(db, `temples/${service.templeId}/service_registrations`);
     const q = query(
       registrationsRef,
       where('userId', '==', user.uid),
@@ -145,7 +145,7 @@ export function ServiceCard({ service, onRegister, onEdit, onDelete }: ServiceCa
     
     try {
       setIsLoading(true);
-      await deleteRegistration(userRegistration.id, user.uid);
+      await deleteRegistration(userRegistration.id, user.uid, service.templeId);
     } catch (error) {
       console.error('Failed to unregister:', error);
     } finally {
