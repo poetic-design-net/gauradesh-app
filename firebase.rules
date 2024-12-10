@@ -104,15 +104,6 @@ service cloud.firestore {
       );
     }
 
-    // Temple admins subcollection
-    match /temples/{templeId}/temple_admins/{adminId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (
-        request.auth.uid == adminId || 
-        isSuperAdmin()
-      );
-    }
-
     // Users collection - Allow initial creation during signup
     match /users/{userId} {
       // Allow reading user profiles
@@ -140,24 +131,6 @@ service cloud.firestore {
       allow delete: if isOwner(userId) || isSuperAdmin();
     }
 
-    match /service_registrations/{registrationId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid == resource.data.userId || 
-        isTempleAdmin(resource.data.templeId)
-      );
-      allow create: if isAuthenticated() && 
-        request.auth.uid == request.resource.data.userId;
-      allow update: if isAuthenticated() && (
-        request.auth.uid == resource.data.userId || 
-        isTempleAdmin(resource.data.templeId)
-      );
-      allow delete: if isAuthenticated() && (
-        request.auth.uid == resource.data.userId || 
-        isTempleAdmin(resource.data.templeId) ||
-        isTempleAdmin(get(/databases/$(database)/documents/service_registrations/$(registrationId)).data.templeId)
-      );
-    }
-
     match /temples/{templeId} {
       // Allow reading temples without authentication for sign-up
       allow read: if true;
@@ -181,6 +154,29 @@ service cloud.firestore {
       );
       
       allow delete: if isAuthenticated() && isSuperAdmin();
+
+      // Temple-specific service registrations
+      match /service_registrations/{registrationId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid == resource.data.userId || 
+          isTempleAdmin(templeId)
+        );
+        allow create: if isAuthenticated() && 
+          request.auth.uid == request.resource.data.userId &&
+          request.resource.data.keys().hasAll([
+            'id', 'userId', 'serviceId', 'templeId', 'serviceName',
+            'serviceType', 'serviceDate', 'serviceTimeSlot', 'status',
+            'createdAt', 'updatedAt'
+          ]);
+        allow update: if isAuthenticated() && (
+          request.auth.uid == resource.data.userId || 
+          isTempleAdmin(templeId)
+        );
+        allow delete: if isAuthenticated() && (
+          request.auth.uid == resource.data.userId || 
+          isTempleAdmin(templeId)
+        );
+      }
 
       match /service_types/{typeId} {
         allow read: if isAuthenticated();

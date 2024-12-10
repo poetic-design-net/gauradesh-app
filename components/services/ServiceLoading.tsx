@@ -1,7 +1,5 @@
 'use client';
 
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-
 export function ServiceLoading() {
   return (
     <div className="animate-in fade-in duration-500">
@@ -16,32 +14,42 @@ export function ServiceLoading() {
         </div>
       </div>
 
-      {/* Grid Skeleton */}
-      <div className="grid gap-6 md:grid-cols-2 p-6">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="h-6 w-3/4 bg-white/10 rounded animate-pulse" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center">
-                  <div className="h-4 w-4 bg-white/10 rounded mr-2" />
-                  <div className="h-4 w-1/2 bg-white/10 rounded" />
+      {/* Weekly View Skeleton */}
+      <div className="space-y-8 p-6">
+        {[...Array(2)].map((_, weekIndex) => (
+          <div key={weekIndex} className="space-y-4">
+            {/* Week Header */}
+            <div className="h-6 w-64 bg-white/10 rounded animate-pulse" />
+            
+            {/* Services List */}
+            <div className="space-y-4">
+              {[...Array(3)].map((_, serviceIndex) => (
+                <div 
+                  key={serviceIndex}
+                  className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-lg p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-grow">
+                      {/* Icon */}
+                      <div className="h-9 w-9 rounded-full bg-white/10 animate-pulse" />
+                      
+                      {/* Title and Type */}
+                      <div className="flex-grow space-y-2">
+                        <div className="h-5 w-48 bg-white/10 rounded animate-pulse" />
+                        <div className="h-4 w-24 bg-white/10 rounded animate-pulse" />
+                      </div>
+                      
+                      {/* Time */}
+                      <div className="h-4 w-32 bg-white/10 rounded animate-pulse" />
+                      
+                      {/* Register Button */}
+                      <div className="ml-4 h-9 w-24 bg-white/10 rounded animate-pulse" />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center">
-                  <div className="h-4 w-4 bg-white/10 rounded mr-2" />
-                  <div className="h-4 w-1/3 bg-white/10 rounded" />
-                </div>
-                <div className="flex items-center">
-                  <div className="h-4 w-4 bg-white/10 rounded mr-2" />
-                  <div className="h-4 w-2/3 bg-white/10 rounded" />
-                </div>
-                <div className="h-20 w-full bg-white/10 rounded" />
-                <div className="h-10 w-full bg-white/10 rounded" />
-              </div>
-            </CardContent>
-          </Card>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>

@@ -129,6 +129,7 @@ export default function DashboardPage() {
         <DashboardServices 
           initialRegistrations={data.registrations}
           templeId={data.temple?.id}
+          userId={user.uid}
         />
       </Suspense>
     </div>

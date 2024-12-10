@@ -285,7 +285,7 @@ export default function AdminDashboard() {
 
     try {
       setActionLoading(true);
-      await deleteRegistration(registrationId, user.uid);
+      await deleteRegistration(registrationId, user.uid, adminData.templeId);
       toast({ 
         description: 'Registration deleted successfully' 
       });

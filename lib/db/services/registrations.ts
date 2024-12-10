@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { FirebaseError } from '../../firebase-error';
-import { ServiceRegistration, SERVICE_REGISTRATIONS_COLLECTION } from './types';
+import { ServiceRegistration } from './types';
 import { withRetry } from './utils';
 import { addTempleMember } from '../temples';
 import { isTempleAdmin, isSuperAdmin } from '../admin';
@@ -45,9 +45,9 @@ function convertTimestamps(data: any): any {
   return result;
 }
 
-export async function deleteRegistration(registrationId: string, userId: string, message?: string): Promise<void> {
+export async function deleteRegistration(registrationId: string, userId: string, templeId: string, message?: string): Promise<void> {
   return withRetry(async () => {
-    const registrationRef = doc(db, SERVICE_REGISTRATIONS_COLLECTION, registrationId);
+    const registrationRef = doc(db, `temples/${templeId}/service_registrations`, registrationId);
     const registrationDoc = await getDoc(registrationRef);
     
     if (!registrationDoc.exists()) {
@@ -107,9 +107,8 @@ export async function getTempleServiceRegistrations(templeId: string): Promise<S
   }
 
   return withRetry(async () => {
-    const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
-    const q = query(registrationsRef, where('templeId', '==', templeId));
-    const snapshot = await getDocs(q);
+    const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
+    const snapshot = await getDocs(registrationsRef);
     return snapshot.docs.map(doc => convertTimestamps({ id: doc.id, ...doc.data() })) as ServiceRegistration[];
   });
 }
@@ -129,13 +128,13 @@ export async function getAllServiceRegistrations(userId: string, templeId: strin
   });
 }
 
-export async function getUserServiceRegistrations(userId: string): Promise<ServiceRegistration[]> {
-  if (!userId) {
+export async function getUserServiceRegistrations(userId: string, templeId: string): Promise<ServiceRegistration[]> {
+  if (!userId || !templeId) {
     return [];
   }
 
   return withRetry(async () => {
-    const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
+    const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
     const q = query(registrationsRef, where('userId', '==', userId));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => convertTimestamps({ id: doc.id, ...doc.data() })) as ServiceRegistration[];
@@ -145,16 +144,17 @@ export async function getUserServiceRegistrations(userId: string): Promise<Servi
 // Real-time registration updates
 export function subscribeToUserRegistrations(
   userId: string,
+  templeId: string,
   onUpdate: (registrations: ServiceRegistration[]) => void,
   onError?: (error: Error) => void
 ): () => void {
-  if (!userId) {
+  if (!userId || !templeId) {
     onUpdate([]);
     return () => {};
   }
 
   try {
-    const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
+    const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
     const q = query(
       registrationsRef,
       where('userId', '==', userId),
@@ -203,7 +203,7 @@ export async function updateServiceRegistrationStatus(
   serviceId: string
 ): Promise<void> {
   return withRetry(async () => {
-    const registrationRef = doc(db, SERVICE_REGISTRATIONS_COLLECTION, registrationId);
+    const registrationRef = doc(db, `temples/${templeId}/service_registrations`, registrationId);
     const registrationDoc = await getDoc(registrationRef);
     
     if (!registrationDoc.exists()) {
@@ -288,7 +288,7 @@ export async function registerForService(
 
   return withRetry(async () => {
     await runTransaction(db, async (transaction) => {
-      const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
+      const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
       const q = query(
         registrationsRef,
         where('userId', '==', userId),
@@ -306,7 +306,7 @@ export async function registerForService(
         throw new FirebaseError('not-found', 'Service not found');
       }
 
-      const registrationRef = doc(collection(db, SERVICE_REGISTRATIONS_COLLECTION));
+      const registrationRef = doc(collection(db, `temples/${templeId}/service_registrations`));
       const registration: ServiceRegistration = {
         id: registrationRef.id,
         userId,
@@ -365,7 +365,7 @@ export async function registerForService(
 
 export async function recalculateServiceParticipants(serviceId: string, templeId: string): Promise<void> {
   return withRetry(async () => {
-    const registrationsRef = collection(db, SERVICE_REGISTRATIONS_COLLECTION);
+    const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
     
     // Get approved registrations
     const approvedQuery = query(

@@ -8,7 +8,7 @@ export const SERVICE_REGISTRATIONS_COLLECTION = 'service_registrations';
 export interface ServiceType {
   id: string;
   name: string;
-  description?: string | null; // Made optional
+  description?: string | null;
   icon: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -44,14 +44,21 @@ export interface ServiceRegistration {
   userId: string;
   serviceId: string;
   templeId: string;
+  serviceName: string;
+  serviceType: string;
+  serviceDate: Timestamp;
+  serviceTimeSlot: {
+    start: string;
+    end: string;
+  };
   status: 'pending' | 'approved' | 'rejected';
   message?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
-export interface EnrichedRegistration extends ServiceRegistration {
+export interface EnrichedRegistration extends Omit<ServiceRegistration, 'serviceName'> {
   service?: Service;
   user?: UserProfile;
-  serviceName?: string; // For backwards compatibility
+  serviceName: string; // Keep it required but allow override
 }

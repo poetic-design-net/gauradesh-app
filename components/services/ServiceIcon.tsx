@@ -12,34 +12,53 @@ interface ServiceIconProps {
 }
 
 export function ServiceIcon({ name, className = '', templeId }: ServiceIconProps) {
-  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
-  const [iconName, setIconName] = useState<string | undefined>(name);
+  const [iconName, setIconName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    // If the name is already a valid Lucide icon, use it directly
-    if (name && name in icons) {
-      setIconName(name);
-      return;
+    async function loadIcon() {
+      if (!templeId || !name) {
+        // If no templeId or name, check if name is a valid icon
+        if (name && name in icons) {
+          setIconName(name);
+        }
+        return;
+      }
+
+      try {
+        // Get service types for the temple
+        const types = await getTempleServiceTypes(templeId);
+        
+        // Find the service type that matches the service type name
+        const serviceType = types.find(type => type.name === name);
+        
+        if (serviceType?.icon) {
+          // Use the icon field from the service type
+          setIconName(serviceType.icon);
+        } else if (name in icons) {
+          // Fallback: if name is a valid icon name, use it directly
+          setIconName(name);
+        } else {
+          console.log('No icon found for service type:', name);
+          setIconName(undefined);
+        }
+      } catch (error) {
+        console.error('Error loading service type icon:', error);
+        // Fallback to using name as icon if it's valid
+        if (name in icons) {
+          setIconName(name);
+        }
+      }
     }
 
-    // If we have a templeId and name, try to find the corresponding service type
-    if (templeId && name) {
-      getTempleServiceTypes(templeId).then(types => {
-        const serviceType = types.find(type => type.name === name);
-        if (serviceType?.icon) {
-          setIconName(serviceType.icon);
-        }
-      }).catch(error => {
-        console.error('Error fetching service types:', error);
-      });
-    }
+    loadIcon();
   }, [name, templeId]);
 
+  // If no icon name is set, show default icon
   if (!iconName) {
     return <HelpCircle className={className} />;
   }
 
-  // Try to find the icon in Lucide icons
+  // Get the icon component from Lucide icons
   const Icon = (icons as Record<string, LucideIcon>)[iconName] || HelpCircle;
   return <Icon className={className} />;
 }

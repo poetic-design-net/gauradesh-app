@@ -10,8 +10,6 @@ import {
   ServiceDialogs,
   ServiceLoading
 } from '@/components/services';
-import { useEffect } from 'react';
-import { subscribeToTempleServices } from '@/lib/db/services/services-optimized';
 
 export default function ServicesPage() {
   const { user } = useAuth();
@@ -26,9 +24,11 @@ export default function ServicesPage() {
     deletingService,
     showForceDeleteDialog,
     isAdmin,
+    userRegistrations,
     setServices,
     setSelectedType,
     handleRegister,
+    handleUnregister,
     handleEdit,
     handleDelete,
     confirmDelete,
@@ -38,27 +38,15 @@ export default function ServicesPage() {
     setShowForceDeleteDialog,
   } = useServices(user?.uid || null, currentTemple?.id || null);
 
-  // Set up real-time subscription
-  useEffect(() => {
-    if (!currentTemple?.id) return;
+  // Show loading state first
+  if (loading) {
+    return <ServiceLoading />;
+  }
 
-    const unsubscribe = subscribeToTempleServices(
-      currentTemple.id,
-      (updatedServices) => {
-        setServices(updatedServices);
-      },
-      {
-        orderByField: 'date',
-        orderDirection: 'desc'
-      }
-    );
-
-    return () => unsubscribe();
-  }, [currentTemple?.id, setServices]);
-
+  // Then check for temple selection
   if (!currentTemple) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="animate-in fade-in duration-500 flex items-center justify-center py-20">
         <div className="text-center space-y-4 p-8 bg-white/10 rounded-lg border border-white/20">
           <HeartHandshake className="h-16 w-16 text-purple-400 mx-auto opacity-50" />
           <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
@@ -68,10 +56,6 @@ export default function ServicesPage() {
         </div>
       </div>
     );
-  }
-
-  if (loading) {
-    return <ServiceLoading />;
   }
 
   return (
@@ -87,8 +71,10 @@ export default function ServicesPage() {
           services={services}
           isAdmin={isAdmin}
           onRegister={handleRegister}
+          onUnregister={handleUnregister}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          userRegistrations={userRegistrations}
         />
       </div>
 

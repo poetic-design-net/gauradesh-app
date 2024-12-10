@@ -298,7 +298,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           </div>
 
           {/* Schedule Section */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&>*:first-child]:col-span-2">
             <FormField
               control={form.control}
               name="date"
@@ -371,7 +371,7 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           </div>
 
           {/* Contact and Capacity Section */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&>*:first-child]:col-span-2">
             <FormField
               control={form.control}
               name="contactPerson.name"

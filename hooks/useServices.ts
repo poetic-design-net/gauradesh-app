@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
 import { Service, ServiceType } from '@/lib/db/services/types';
 import { getTempleServices, deleteService } from '@/lib/db/services/services';
-import { registerForService } from '@/lib/db/services/registrations';
+import { registerForService, deleteRegistration } from '@/lib/db/services/registrations';
 import { getTempleServiceTypes } from '@/lib/db/services/service-types';
 import { isTempleAdmin } from '@/lib/db/admin';
 import { useToast } from '@/components/ui/use-toast';
+import { subscribeToTempleServices, subscribeToServicesByType } from '@/lib/db/services/services-optimized';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot,
+  QuerySnapshot,
+  DocumentData,
+  QueryDocumentSnapshot,
+  getDocs
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface UseServicesReturn {
   services: Service[];
@@ -15,9 +27,11 @@ interface UseServicesReturn {
   deletingService: Service | null;
   showForceDeleteDialog: boolean;
   isAdmin: boolean;
+  userRegistrations: Record<string, { status: 'pending' | 'approved' | 'rejected' }>;
   setServices: Dispatch<SetStateAction<Service[]>>;
   setSelectedType: (type: string) => void;
   handleRegister: (serviceId: string, message?: string) => Promise<void>;
+  handleUnregister: (serviceId: string) => Promise<void>;
   handleEdit: (service: Service) => void;
   handleDelete: (service: Service) => void;
   confirmDelete: (force: boolean) => Promise<void>;
@@ -38,6 +52,7 @@ export function useServices(userId: string | null, templeId: string | null): Use
   const [showForceDeleteDialog, setShowForceDeleteDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [userRegistrations, setUserRegistrations] = useState<Record<string, { status: 'pending' | 'approved' | 'rejected' }>>({});
 
   // Check admin status only after both userId and templeId are available
   useEffect(() => {
@@ -59,6 +74,7 @@ export function useServices(userId: string | null, templeId: string | null): Use
       }
     }
 
+    setLoading(true);
     checkAdminStatus();
   }, [userId, templeId]);
 
@@ -86,12 +102,67 @@ export function useServices(userId: string | null, templeId: string | null): Use
     loadServiceTypes();
   }, [templeId, isInitialized, toast]);
 
-  // Update loading state when services are set or when dependencies are not available
+  // Subscribe to services based on selected type
   useEffect(() => {
-    if (services.length > 0 || !templeId || !isInitialized) {
-      setLoading(false);
+    if (!templeId || !isInitialized) return;
+
+    let unsubscribe: () => void;
+
+    if (selectedType === 'all') {
+      unsubscribe = subscribeToTempleServices(
+        templeId,
+        (updatedServices) => {
+          setServices(updatedServices);
+          setLoading(false);
+        },
+        {
+          orderByField: 'date',
+          orderDirection: 'desc'
+        }
+      );
+    } else {
+      unsubscribe = subscribeToServicesByType(
+        templeId,
+        selectedType,
+        (updatedServices) => {
+          setServices(updatedServices);
+          setLoading(false);
+        }
+      );
     }
-  }, [services, templeId, isInitialized]);
+
+    return () => unsubscribe();
+  }, [templeId, isInitialized, selectedType]);
+
+  // Subscribe to user registrations
+  useEffect(() => {
+    if (!userId || !templeId) {
+      setUserRegistrations({});
+      return;
+    }
+
+    // Update path to use temple-specific collection
+    const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
+    const q = query(registrationsRef, where('userId', '==', userId));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const registrations: Record<string, { status: 'pending' | 'approved' | 'rejected' }> = {};
+        snapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
+          const data = doc.data();
+          registrations[data.serviceId] = { status: data.status };
+        });
+        setUserRegistrations(registrations);
+      },
+      (error) => {
+        console.error('Error subscribing to registrations:', error);
+        setUserRegistrations({});
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userId, templeId]);
 
   const handleRegister = useCallback(async (serviceId: string, message?: string) => {
     if (!userId) {
@@ -118,15 +189,53 @@ export function useServices(userId: string | null, templeId: string | null): Use
         title: 'Success',
         description: 'You have successfully registered for this service',
       });
-      
-      const updatedServices = await getTempleServices(templeId);
-      setServices(updatedServices);
     } catch (error: any) {
       console.error('Error registering for service:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error.message || 'Failed to register for service',
+      });
+    }
+  }, [userId, templeId, toast]);
+
+  const handleUnregister = useCallback(async (serviceId: string) => {
+    if (!userId || !templeId) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'You must be logged in to unregister from a service',
+      });
+      return;
+    }
+
+    try {
+      // Find the registration ID from the temple-specific collection
+      const registrationsRef = collection(db, `temples/${templeId}/service_registrations`);
+      const q = query(
+        registrationsRef,
+        where('userId', '==', userId),
+        where('serviceId', '==', serviceId)
+      );
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        throw new Error('Registration not found');
+      }
+
+      const registrationId = snapshot.docs[0].id;
+      await deleteRegistration(registrationId, userId, templeId);
+      
+      toast({
+        title: 'Success',
+        description: 'You have successfully unregistered from this service',
+      });
+    } catch (error: any) {
+      console.error('Error unregistering from service:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to unregister from service',
       });
     }
   }, [userId, templeId, toast]);
@@ -148,9 +257,6 @@ export function useServices(userId: string | null, templeId: string | null): Use
         title: 'Success',
         description: 'Service has been deleted successfully',
       });
-      
-      const updatedServices = await getTempleServices(templeId);
-      setServices(updatedServices);
     } catch (error: any) {
       if (error.code === 'failed-precondition' && !force) {
         setShowForceDeleteDialog(true);
@@ -171,18 +277,10 @@ export function useServices(userId: string | null, templeId: string | null): Use
 
   const handleServiceSaved = useCallback(async () => {
     setEditingService(null);
-    if (templeId) {
-      const updatedServices = await getTempleServices(templeId);
-      setServices(updatedServices);
-    }
-  }, [templeId]);
-
-  const filteredServices = selectedType === 'all'
-    ? services
-    : services.filter(service => service.type === selectedType);
+  }, []);
 
   return {
-    services: filteredServices,
+    services,
     serviceTypes,
     loading,
     selectedType,
@@ -190,9 +288,11 @@ export function useServices(userId: string | null, templeId: string | null): Use
     deletingService,
     showForceDeleteDialog,
     isAdmin,
+    userRegistrations,
     setServices,
     setSelectedType,
     handleRegister,
+    handleUnregister,
     handleEdit,
     handleDelete,
     confirmDelete,

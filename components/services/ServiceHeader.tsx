@@ -20,16 +20,16 @@ export function ServiceHeader({ selectedType, serviceTypes, onTypeChange }: Serv
     <div className="space-y-4 pt-8 px-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r text-white">
-            Temple Services
+          <h1 className="text-3xl font-bold text-white">
+            Services
           </h1>
-          <p className="text-xl text-gray-300">
-            Discover and participate in various spiritual services
+          <p className="text-lg text-gray-300 mt-1">
+            View and register for upcoming services
           </p>
         </div>
         <div className="flex items-center gap-4">
           <Select value={selectedType} onValueChange={onTypeChange}>
-            <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white">
+            <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white backdrop-blur-sm">
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
             <SelectContent>
@@ -43,6 +43,7 @@ export function ServiceHeader({ selectedType, serviceTypes, onTypeChange }: Serv
           </Select>
         </div>
       </div>
+      <div className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
     </div>
   );
 }

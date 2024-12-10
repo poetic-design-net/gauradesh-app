@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ServiceIcon } from '@/components/services/ServiceIcon';
-import { Activity, Bell, ChevronRight } from 'lucide-react';
+import { Activity, Bell, ChevronRight, X } from 'lucide-react';
 import { ServiceRegistration } from '@/lib/db/services';
 import { subscribeToTempleServices } from '@/lib/db/services/services-optimized';
+import { deleteRegistration } from '@/lib/db/services/registrations';
+import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 
 interface ServiceData {
@@ -33,6 +35,7 @@ interface EnrichedRegistration extends ServiceRegistration {
 interface DashboardServicesProps {
   initialRegistrations: EnrichedRegistration[];
   templeId: string | undefined;
+  userId: string;
 }
 
 function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
@@ -49,9 +52,10 @@ function StatusBadge({ status }: { status: ServiceRegistration['status'] }) {
   );
 }
 
-export function DashboardServices({ initialRegistrations, templeId }: DashboardServicesProps) {
+export function DashboardServices({ initialRegistrations, templeId, userId }: DashboardServicesProps) {
   const router = useRouter();
-  const [registrations] = useState(initialRegistrations);
+  const { toast } = useToast();
+  const [registrations, setRegistrations] = useState(initialRegistrations);
   const [services, setServices] = useState<Record<string, ServiceData>>({});
 
   // Subscribe to services updates
@@ -88,25 +92,32 @@ export function DashboardServices({ initialRegistrations, templeId }: DashboardS
     return () => unsubscribe();
   }, [templeId, registrations]);
 
-  // Enrich registrations with service data
-  const enrichedRegistrations = registrations.map(reg => ({
-    ...reg,
-    service: services[reg.serviceId] || reg.service || {
-      id: reg.serviceId,
-      name: 'Loading...',
-      type: 'unknown',
-      maxParticipants: 0,
-      currentParticipants: 0,
-      pendingParticipants: 0,
-      date: reg.createdAt,
-      timeSlot: { start: '00:00', end: '00:00' },
-      contactPerson: { name: 'Unknown', phone: 'N/A' },
-      notes: null,
-      createdAt: reg.createdAt,
-      updatedAt: reg.updatedAt,
-      createdBy: ''
+  const handleUnregister = async (registration: EnrichedRegistration) => {
+    if (!templeId) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Temple ID is required',
+      });
+      return;
     }
-  }));
+
+    try {
+      await deleteRegistration(registration.id, userId, templeId);
+      setRegistrations(prev => prev.filter(reg => reg.id !== registration.id));
+      toast({
+        title: 'Success',
+        description: 'Successfully unregistered from the service',
+      });
+    } catch (error: any) {
+      console.error('Error unregistering:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to unregister from service',
+      });
+    }
+  };
 
   return (
     <Card className="transition-all duration-300 hover:shadow-lg dark:hover:shadow-primary/10">
@@ -115,7 +126,7 @@ export function DashboardServices({ initialRegistrations, templeId }: DashboardS
         <Bell className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        {enrichedRegistrations.length === 0 ? (
+        {registrations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Activity className="h-12 w-12 text-muted-foreground/50" />
             <p className="mt-4 text-lg font-medium text-muted-foreground">
@@ -132,7 +143,7 @@ export function DashboardServices({ initialRegistrations, templeId }: DashboardS
           </div>
         ) : (
           <div className="space-y-4">
-            {enrichedRegistrations.map((reg) => (
+            {registrations.map((reg) => (
               <Card key={reg.id} className="group overflow-hidden transition-all duration-300 hover:shadow-md dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -149,7 +160,20 @@ export function DashboardServices({ initialRegistrations, templeId }: DashboardS
                         </p>
                       </div>
                     </div>
-                    <StatusBadge status={reg.status} />
+                    <div className="flex items-center gap-4">
+                      <StatusBadge status={reg.status} />
+                      {reg.status === 'approved' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleUnregister(reg)}
+                          className="text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="ml-2">Unregister</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
