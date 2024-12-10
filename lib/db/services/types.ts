@@ -46,6 +46,24 @@ export interface Service {
   createdBy: string;
 }
 
+export interface ServiceUpdate {
+  name?: string;
+  description?: string;
+  type?: string;
+  maxParticipants?: number;
+  date?: Date;
+  timeSlot?: {
+    start: string;
+    end: string;
+  };
+  contactPerson?: {
+    name: string;
+    phone: string;
+    userId?: string;  // Added userId as optional field to match Service interface
+  };
+  notes?: string | null;
+}
+
 export interface ServiceRegistration {
   id: string;
   userId: string;
