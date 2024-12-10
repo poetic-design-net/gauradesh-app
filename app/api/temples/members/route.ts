@@ -23,53 +23,39 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get all admins
-    const adminsSnapshot = await adminDb
-      .collection(`temples/${templeId}/temple_admins`)
-      .get();
+    // Get all members and admins in parallel
+    const [adminsSnapshot, membersSnapshot, usersWithTempleSnapshot] = await Promise.all([
+      adminDb.collection(`temples/${templeId}/temple_admins`).get(),
+      adminDb.collection(`temples/${templeId}/temple_members`).get(),
+      adminDb.collection('users').where('templeId', '==', templeId).get()
+    ]);
     
-    const adminMembers = adminsSnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        templeId,
-        userId: data.userId,
-        role: 'admin' as const,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt
-      };
-    });
+    // Process members data
+    const adminMembers = adminsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      templeId,
+      userId: doc.data().userId,
+      role: 'admin' as const,
+      createdAt: doc.data().createdAt,
+      updatedAt: doc.data().updatedAt
+    }));
 
-    // Get all regular members from temple_members collection
-    const membersSnapshot = await adminDb
-      .collection(`temples/${templeId}/temple_members`)
-      .get();
-    
-    const regularMembers = membersSnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        templeId,
-        userId: data.userId,
-        role: 'member' as const,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt
-      };
-    });
+    const regularMembers = membersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      templeId,
+      userId: doc.data().userId,
+      role: 'member' as const,
+      createdAt: doc.data().createdAt,
+      updatedAt: doc.data().updatedAt
+    }));
 
-    // Get users who have this templeId in their profile but are not in temple_members
-    const usersWithTempleSnapshot = await adminDb
-      .collection('users')
-      .where('templeId', '==', templeId)
-      .get();
-
-    // Create a Set of existing member userIds for quick lookup
+    // Create a Set of existing member userIds
     const existingMemberIds = new Set([
       ...adminMembers.map(m => m.userId),
       ...regularMembers.map(m => m.userId)
     ]);
 
-    // Filter out users who are already in temple_members
+    // Process additional members
     const additionalMembers = usersWithTempleSnapshot.docs
       .filter(doc => !existingMemberIds.has(doc.id))
       .map(doc => ({
@@ -81,68 +67,51 @@ export async function GET(request: Request) {
         updatedAt: doc.data().updatedAt || Timestamp.now()
       }));
 
-    // Combine all unique members
+    // Combine all members
     const allMembers = [...adminMembers, ...regularMembers, ...additionalMembers];
-    
-    // Get user profiles for all members
+
+    // Get all unique userIds
+    const uniqueUserIds = Array.from(new Set(allMembers.map(m => m.userId)));
+
     try {
-      const userProfiles = await Promise.all(
-        allMembers.map(async (member) => {
-          try {
-            // Get user profile
-            const userDoc = await adminDb.collection('users').doc(member.userId).get();
-            // Get admin status from admin collection
-            const adminDoc = await adminDb.collection('admin').doc(member.userId).get();
-            const adminData = adminDoc.exists ? adminDoc.data() : null;
+      // Batch get all user profiles and admin statuses in parallel
+      const [userDocs, adminDocs] = await Promise.all([
+        adminDb.getAll(...uniqueUserIds.map(uid => adminDb.collection('users').doc(uid))),
+        adminDb.getAll(...uniqueUserIds.map(uid => adminDb.collection('admin').doc(uid)))
+      ]);
 
-            if (!userDoc.exists) {
-              console.warn(`User profile not found for userId: ${member.userId}`);
-              return {
-                uid: member.userId,
-                email: null,
-                displayName: 'Unknown User',
-                photoURL: null,
-                bio: null,
-                templeId: null,
-                isAdmin: false,
-                isSuperAdmin: false
-              };
-            }
-
-            const userData = userDoc.data() as UserProfile;
-            return {
-              uid: userData.uid,
-              email: userData.email,
-              displayName: userData.displayName,
-              photoURL: userData.photoURL,
-              bio: userData.bio,
-              templeId: userData.templeId,
-              isAdmin: adminData?.isAdmin || false,
-              isSuperAdmin: adminData?.isSuperAdmin || false
-            };
-          } catch (error) {
-            console.error(`Error fetching user profile for userId: ${member.userId}`, error);
-            return {
-              uid: member.userId,
-              email: null,
-              displayName: 'Error Loading User',
-              photoURL: null,
-              bio: null,
-              templeId: null,
-              isAdmin: false,
-              isSuperAdmin: false
-            };
+      // Create maps for quick lookup
+      const userProfileMap = new Map(
+        userDocs.map(doc => [
+          doc.id,
+          doc.exists ? doc.data() as UserProfile : {
+            uid: doc.id,
+            email: null,
+            displayName: 'Unknown User',
+            photoURL: null,
+            bio: null,
+            templeId: null
           }
-        })
+        ])
       );
 
-      // Map user profiles to members and serialize the data
+      const adminStatusMap = new Map(
+        adminDocs.map(doc => [
+          doc.id,
+          doc.exists ? doc.data() : { isAdmin: false, isSuperAdmin: false }
+        ])
+      );
+
+      // Enrich members with profile data
       const enrichedMembers = allMembers.map(member => ({
         ...member,
-        profile: userProfiles.find(profile => profile.uid === member.userId)
+        profile: {
+          ...userProfileMap.get(member.userId),
+          ...adminStatusMap.get(member.userId)
+        }
       }));
 
-      // For users found through templeId in their profile, also add them to temple_members collection
+      // Handle additional members in batch if needed
       if (additionalMembers.length > 0) {
         const batch = adminDb.batch();
         for (const member of additionalMembers) {
@@ -161,7 +130,6 @@ export async function GET(request: Request) {
         await batch.commit();
       }
 
-      // Serialize the data before sending it to the client
       return NextResponse.json({ 
         members: serializeData(enrichedMembers)
       });

@@ -1,7 +1,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  connectFirestoreEmulator,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  setLogLevel,
+  memoryLocalCache
+} from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getPerformance } from 'firebase/performance';
 import { firebaseConfig } from './firebase-config';
 
 type FirebaseConfigType = {
@@ -37,9 +46,32 @@ function initializeFirebase() {
     // Initialize Firebase
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-    // Initialize services
+    // Initialize Performance Monitoring in browser environment
+    if (typeof window !== 'undefined') {
+      getPerformance(app);
+    }
+
+    // Initialize services with optimized settings
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    
+    // Disable Firestore logs in production
+    if (process.env.NODE_ENV === 'production') {
+      setLogLevel('error');
+    }
+
+    // Initialize Firestore with optimized settings
+    const db = initializeFirestore(app, {
+      // Use memory cache for server-side rendering and persistent cache for client-side
+      localCache: typeof window !== 'undefined'
+        ? persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+          })
+        : memoryLocalCache(),
+      // Optimize for web apps
+      experimentalForceLongPolling: true,
+      ignoreUndefinedProperties: true
+    });
+
     const storage = getStorage(app);
 
     // Connect to emulators in development
@@ -49,15 +81,11 @@ function initializeFirebase() {
           connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
           connectFirestoreEmulator(db, 'localhost', 8080);
           connectStorageEmulator(storage, 'localhost', 9199);
-          console.log('Connected to Firebase emulators');
         }
       } catch (emulatorError) {
         console.error('Failed to connect to Firebase emulators:', emulatorError);
       }
     }
-
-    // Log successful initialization
-    console.log('Firebase client initialized successfully');
 
     return { app, auth, db, storage };
   } catch (error) {
@@ -70,18 +98,21 @@ function initializeFirebase() {
 // Initialize Firebase and export services
 const { app, auth, db, storage } = initializeFirebase();
 
-// Add auth state change listener for debugging
+// Add auth state change listener with token refresh optimization
 auth.onAuthStateChanged((user) => {
   if (user) {
-    console.log('Auth state changed: User is signed in', user.uid);
-    // Get the current ID token for debugging
-    user.getIdToken(true).then(token => {
-      console.log('Current ID token refreshed');
-    }).catch(error => {
-      console.error('Error refreshing ID token:', error);
+    // Only refresh if token is close to expiration
+    const tokenExpirationThreshold = 5 * 60 * 1000; // 5 minutes
+    user.getIdTokenResult().then(idTokenResult => {
+      const expirationTime = new Date(idTokenResult.expirationTime).getTime();
+      const timeUntilExpiration = expirationTime - Date.now();
+      
+      if (timeUntilExpiration < tokenExpirationThreshold) {
+        user.getIdToken(true).catch(error => {
+          console.error('Error refreshing ID token:', error);
+        });
+      }
     });
-  } else {
-    console.log('Auth state changed: User is signed out');
   }
 });
 

@@ -40,8 +40,6 @@ if (!admin.apps.length) {
         privateKey: formatPrivateKey(privateKey),
       } as admin.ServiceAccount)
     });
-
-    console.log('Firebase Admin SDK initialized successfully');
   } catch (error) {
     console.error('Firebase admin initialization error:', error);
     // Re-throw the error to prevent the app from starting with invalid Firebase config

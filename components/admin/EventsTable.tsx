@@ -1,13 +1,14 @@
 import { Event } from '@/lib/db/events/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, Loader2 } from 'lucide-react';
+import { Trash2, Loader2, Pencil } from 'lucide-react';
 import { ExpandableText } from './ExpandableText';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface EventsTableProps {
   events: Event[];
   onDeleteEvent: (event: Event) => void;
+  onEditEvent?: (event: Event) => void;
   isLoading: boolean;
 }
 
@@ -27,7 +28,7 @@ function TableSkeleton() {
   );
 }
 
-export function EventsTable({ events, onDeleteEvent, isLoading }: EventsTableProps) {
+export function EventsTable({ events, onDeleteEvent, onEditEvent, isLoading }: EventsTableProps) {
   // If there's no data yet, show skeleton
   if (events.length === 0) {
     return (
@@ -58,7 +59,7 @@ export function EventsTable({ events, onDeleteEvent, isLoading }: EventsTablePro
                     <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Location</th>
                     <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">Start Date</th>
                     <th className="hidden sm:table-cell px-4 py-3 text-left text-sm font-medium">End Date</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -82,19 +83,30 @@ export function EventsTable({ events, onDeleteEvent, isLoading }: EventsTablePro
                         {event.endDate.toDate().toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-sm text-right">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => onDeleteEvent(event)}
-                          disabled={isLoading}
-                          className="ml-auto"
-                        >
-                          {isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
+                        <div className="flex justify-end gap-2">
+                          {onEditEvent && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onEditEvent(event)}
+                              disabled={isLoading}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           )}
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => onDeleteEvent(event)}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

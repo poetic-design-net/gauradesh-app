@@ -31,7 +31,6 @@ export interface UserProfile {
 
 export async function createUserProfile(uid: string, data: Partial<UserProfile>) {
   try {
-    console.log('Creating user profile:', { uid, data });
     const batch = writeBatch(db);
 
     // Create or update user document
@@ -49,7 +48,6 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
         updatedAt: serverTimestamp(),
       };
 
-      console.log('Creating new user document:', userData);
       batch.set(userRef, userData);
 
       // Create admin document for permissions
@@ -62,9 +60,7 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
         updatedAt: serverTimestamp(),
       });
 
-      console.log('Committing batch write...');
       await batch.commit();
-      console.log('User and admin documents created successfully');
       return userData;
     }
 
@@ -75,9 +71,7 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
       updatedAt: serverTimestamp(),
     };
 
-    console.log('Updating existing user document:', updateData);
     await updateDoc(userRef, updateData);
-    console.log('User document updated successfully');
     return { ...updateData, uid };
   } catch (error) {
     console.error('Error in createUserProfile:', error);
@@ -87,17 +81,14 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
 
 export async function getUserProfile(uid: string) {
   try {
-    console.log('Getting user profile:', uid);
     const userRef = doc(db, USERS_COLLECTION, uid);
     const userSnap = await getDoc(userRef);
     
     if (userSnap.exists()) {
-      console.log('User profile found');
       return userSnap.data() as UserProfile;
     }
 
     // Return a default profile without creating it
-    console.log('User profile not found, returning default profile');
     return {
       uid,
       email: '',
@@ -114,12 +105,10 @@ export async function getUserProfile(uid: string) {
 
 export async function updateUserProfile(uid: string, data: Partial<UserProfile>) {
   try {
-    console.log('Updating user profile:', { uid, data });
     const userRef = doc(db, USERS_COLLECTION, uid);
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
-      console.log('Profile does not exist, creating new one');
       // Create profile if it doesn't exist
       return createUserProfile(uid, data);
     }
@@ -139,9 +128,7 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
       updateData.bio = data.bio;
     }
 
-    console.log('Updating existing profile with data:', updateData);
     await updateDoc(userRef, updateData);
-    console.log('Profile updated successfully');
     return { ...updateData, uid };
   } catch (error) {
     console.error('Error in updateUserProfile:', error);
@@ -151,7 +138,6 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
 
 export async function searchUsers(searchTerm: string) {
   try {
-    console.log('Searching users with term:', searchTerm);
     const usersRef = collection(db, USERS_COLLECTION);
     const q = query(
       usersRef,
@@ -160,7 +146,6 @@ export async function searchUsers(searchTerm: string) {
     );
     
     const querySnapshot = await getDocs(q);
-    console.log('Search results count:', querySnapshot.size);
     return querySnapshot.docs.map(doc => doc.data() as UserProfile);
   } catch (error) {
     console.error('Error in searchUsers:', error);
@@ -170,12 +155,10 @@ export async function searchUsers(searchTerm: string) {
 
 export async function getUsersByTemple(templeId: string) {
   try {
-    console.log('Getting users for temple:', templeId);
     const usersRef = collection(db, USERS_COLLECTION);
     const q = query(usersRef, where('templeId', '==', templeId));
     
     const querySnapshot = await getDocs(q);
-    console.log('Users found:', querySnapshot.size);
     return querySnapshot.docs.map(doc => doc.data() as UserProfile);
   } catch (error) {
     console.error('Error in getUsersByTemple:', error);
@@ -185,12 +168,10 @@ export async function getUsersByTemple(templeId: string) {
 
 export async function checkUserPermissions(uid: string) {
   try {
-    console.log('Checking user permissions:', uid);
     const adminRef = doc(db, ADMIN_COLLECTION, uid);
     const adminSnap = await getDoc(adminRef);
     
     if (!adminSnap.exists()) {
-      console.log('No admin document found, creating default permissions');
       await setDoc(adminRef, {
         isAdmin: false,
         isSuperAdmin: false,
@@ -202,7 +183,6 @@ export async function checkUserPermissions(uid: string) {
     }
 
     const adminData = adminSnap.data();
-    console.log('Admin permissions found:', adminData);
     return adminData.isAdmin || adminData.isSuperAdmin;
   } catch (error) {
     console.error('Error checking user permissions:', error);

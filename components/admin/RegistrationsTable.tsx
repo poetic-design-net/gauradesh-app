@@ -1,5 +1,4 @@
-import { ServiceRegistration } from '@/lib/db/services';
-import { UserProfile } from '@/lib/db/users';
+import { EnrichedRegistration, ServiceRegistration } from '@/lib/db/services';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Trash2, Loader2, CheckCircle2, XCircle, Clock, ChevronDown } from 'lucide-react';
@@ -7,7 +6,7 @@ import { ExpandableText } from './ExpandableText';
 import { formatFirebaseTimestamp } from '@/lib/utils';
 
 interface RegistrationsTableProps {
-  registrations: Array<ServiceRegistration & { user?: UserProfile }>;
+  registrations: EnrichedRegistration[];
   onStatusUpdate: (registrationId: string, newStatus: ServiceRegistration['status']) => void;
   onDeleteRegistration: (registrationId: string) => void;
   isLoading: boolean;
@@ -20,6 +19,7 @@ const getStatusConfig = (status: ServiceRegistration['status']) => {
         icon: CheckCircle2,
         color: 'text-green-600 dark:text-green-400',
         bgColor: 'bg-green-50 dark:bg-green-900/10',
+        hoverBgColor: 'hover:bg-green-100 dark:hover:bg-green-900/20',
         label: 'Approved'
       };
     case 'rejected':
@@ -27,6 +27,7 @@ const getStatusConfig = (status: ServiceRegistration['status']) => {
         icon: XCircle,
         color: 'text-red-600 dark:text-red-400',
         bgColor: 'bg-red-50 dark:bg-red-900/10',
+        hoverBgColor: 'hover:bg-red-100 dark:hover:bg-red-900/20',
         label: 'Rejected'
       };
     default:
@@ -34,6 +35,7 @@ const getStatusConfig = (status: ServiceRegistration['status']) => {
         icon: Clock,
         color: 'text-yellow-600 dark:text-yellow-400',
         bgColor: 'bg-yellow-50 dark:bg-yellow-900/10',
+        hoverBgColor: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/20',
         label: 'Pending'
       };
   }
@@ -74,7 +76,7 @@ export function RegistrationsTable({
                     <tr key={reg.id} className="hover:bg-muted/50">
                       <td className="px-3 sm:px-4 py-2 sm:py-3 text-sm w-full sm:w-auto">
                         <div className="font-medium break-words">
-                          <ExpandableText text={reg.serviceName} maxLength={30} />
+                          <ExpandableText text={reg.serviceName || ''} maxLength={30} />
                         </div>
                         <div className="sm:hidden mt-2 space-y-2.5 border-t border-border/50 pt-2">
                           <div className="flex items-center space-x-2">
@@ -102,19 +104,17 @@ export function RegistrationsTable({
                             value={reg.status}
                             onChange={(e) => onStatusUpdate(reg.id, e.target.value as ServiceRegistration['status'])}
                             className={`
-                              w-full sm:w-10 sm:h-10
-                              rounded-lg sm:rounded-full
-                              ${statusConfig.bgColor}
+                              w-full
+                              rounded-lg
                               transition-colors duration-200
                               cursor-pointer
-                              hover:opacity-90
                               focus:ring-2
                               focus:ring-offset-2
                               appearance-none
                               relative
                               z-10
                               opacity-0
-                              py-2 px-3 sm:p-0
+                              py-2 px-3
                             `}
                             disabled={isLoading}
                           >
@@ -127,15 +127,20 @@ export function RegistrationsTable({
                             flex items-center
                             pointer-events-none
                             ${statusConfig.bgColor}
-                            rounded-lg sm:rounded-full
-                            px-3 sm:px-0
+                            ${statusConfig.hoverBgColor}
+                            rounded-lg
+                            px-3
+                            border border-border/50
+                            shadow-sm
+                            transition-all duration-200
+                            group-hover:shadow
                           `}>
-                            <div className="flex items-center justify-between sm:justify-center w-full">
-                              <div className="flex items-center space-x-2 sm:space-x-0">
-                                <StatusIcon className={`w-5 h-5 sm:w-6 sm:h-6 ${statusConfig.color}`} />
-                                <span className="text-sm hidden">{statusConfig.label}</span>
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center space-x-2">
+                                <StatusIcon className={`w-5 h-5 ${statusConfig.color}`} />
+                                <span className="text-sm hidden md:block font-medium">{statusConfig.label}</span>
                               </div>
-                              <ChevronDown className="w-4 h-4 sm:hidden opacity-50" />
+                              <ChevronDown className="w-4 h-4 hidden sm:block opacity-50" />
                             </div>
                           </div>
                         </div>

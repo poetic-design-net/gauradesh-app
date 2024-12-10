@@ -2,17 +2,23 @@ import { Service } from '@/lib/db/services';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Loader2 } from 'lucide-react';
+import { Trash2, Loader2, Pencil } from 'lucide-react';
 import { ExpandableText } from './ExpandableText';
 import { formatFirebaseTimestamp } from '@/lib/utils';
 
 interface ServicesTableProps {
   services: Service[];
   onDeleteService: (service: Service) => void;
+  onEditService?: (service: Service) => void;
   isLoading: boolean;
 }
 
-export function ServicesTable({ services, onDeleteService, isLoading }: ServicesTableProps) {
+export function ServicesTable({ 
+  services, 
+  onDeleteService, 
+  onEditService, 
+  isLoading 
+}: ServicesTableProps) {
   return (
     <Card className="shadow-lg">
       <CardHeader className="border-b">
@@ -66,19 +72,31 @@ export function ServicesTable({ services, onDeleteService, isLoading }: Services
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-right">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => onDeleteService(service)}
-                          disabled={isLoading}
-                          className="ml-auto"
-                        >
-                          {isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
+                        <div className="flex items-center justify-end space-x-2">
+                          {onEditService && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onEditService(service)}
+                              disabled={isLoading}
+                              className="hover:bg-muted"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           )}
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => onDeleteService(service)}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

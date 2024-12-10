@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createEvent, updateEvent } from '@/lib/db/events/events';
 import { Event, CreateEventData } from '@/lib/db/events/types';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
+import { ImageUpload } from '@/components/ui/image-upload';
 import {
   Form,
   FormControl,
@@ -46,6 +47,7 @@ interface EventFormProps {
 export default function EventForm({ templeId, event }: EventFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
@@ -69,7 +71,16 @@ export default function EventForm({ templeId, event }: EventFormProps) {
     },
   });
 
-  async function onSubmit(data: z.infer<typeof eventSchema>) {
+  const onSubmit = useCallback(async (data: z.infer<typeof eventSchema>) => {
+    if (isUploading) {
+      toast({
+        title: 'Please wait',
+        description: 'Please wait for the image to finish uploading before submitting the form.',
+        variant: 'default'
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       
@@ -80,19 +91,22 @@ export default function EventForm({ templeId, event }: EventFormProps) {
         startDate: data.startDate,
         endDate: data.endDate,
         registrationRequired: data.registrationRequired,
-        ...(data.capacity && { capacity: data.capacity }),
-        ...(data.imageUrl && { imageUrl: data.imageUrl }),
+        capacity: data.capacity,
+        ...(data.imageUrl && data.imageUrl !== '' ? { imageUrl: data.imageUrl } : {}),
       };
 
+      let eventId: string;
+      
       if (event) {
         await updateEvent(templeId, event.id, eventData);
+        eventId = event.id;
         toast({
           title: 'Event updated',
           description: 'The event has been successfully updated.',
           variant: 'success'
         });
       } else {
-        await createEvent(templeId, eventData);
+        eventId = await createEvent(templeId, eventData);
         toast({
           title: 'Event created',
           description: 'The event has been successfully created.',
@@ -100,7 +114,7 @@ export default function EventForm({ templeId, event }: EventFormProps) {
         });
       }
 
-      router.push(`/temples/${templeId}/events`);
+      router.push(`/temples/${templeId}/events/${eventId}`);
       router.refresh();
     } catch (error) {
       console.error('Error saving event:', error);
@@ -112,11 +126,30 @@ export default function EventForm({ templeId, event }: EventFormProps) {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  }, [event, templeId, router, isUploading]);
+
+  const handleImageUpload = useCallback((url: string) => {
+    if (url) {
+      form.setValue('imageUrl', url, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      });
+    }
+  }, [form]);
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form 
+        onSubmit={(e) => {
+          if (isUploading) {
+            e.preventDefault();
+            return;
+          }
+          form.handleSubmit(onSubmit)(e);
+        }} 
+        className="space-y-6"
+      >
         <FormField
           control={form.control}
           name="title"
@@ -170,6 +203,7 @@ export default function EventForm({ templeId, event }: EventFormProps) {
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
+                        type="button"
                         variant="outline"
                         className={cn(
                           "date-time-picker-trigger",
@@ -227,6 +261,7 @@ export default function EventForm({ templeId, event }: EventFormProps) {
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
+                        type="button"
                         variant="outline"
                         className={cn(
                           "date-time-picker-trigger",
@@ -325,20 +360,40 @@ export default function EventForm({ templeId, event }: EventFormProps) {
           name="imageUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Image URL (optional)</FormLabel>
+              <FormLabel>Event Image</FormLabel>
               <FormControl>
-                <Input {...field} />
+                <ImageUpload
+                  onUpload={handleImageUpload}
+                  currentImageUrl={field.value}
+                  path={`temples/${templeId}/events/${event?.id || 'new'}/image`}
+                  aspectRatio="wide"
+                  onUploadStart={() => setIsUploading(true)}
+                  onUploadEnd={() => setIsUploading(false)}
+                />
               </FormControl>
               <FormDescription>
-                Provide a URL for an event image
+                Upload an image for the event
               </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving...' : event ? 'Update Event' : 'Create Event'}
+        <Button 
+          type="submit" 
+          disabled={isSubmitting || isUploading}
+          onClick={(e) => {
+            if (isUploading) {
+              e.preventDefault();
+              toast({
+                title: 'Please wait',
+                description: 'Please wait for the image to finish uploading before submitting the form.',
+                variant: 'default'
+              });
+            }
+          }}
+        >
+          {isSubmitting ? 'Saving...' : isUploading ? 'Uploading Image...' : event ? 'Update Event' : 'Create Event'}
         </Button>
       </form>
     </Form>

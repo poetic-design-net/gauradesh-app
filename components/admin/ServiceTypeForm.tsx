@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -17,8 +17,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { createServiceType } from '@/lib/db/services';
-import { X, icons } from 'lucide-react';
+import { createServiceType, updateServiceType, ServiceType } from '@/lib/db/services';
+import { X, icons, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useTempleContext } from '@/contexts/TempleContext';
@@ -34,62 +34,113 @@ export interface ServiceTypeFormProps {
   onClose: () => void;
   onSuccess: () => void;
   templeId?: string | null;
+  serviceType?: ServiceType;
 }
 
-// Get all available Lucide icons
-const availableIcons = Object.entries(icons).map(([name, Icon]) => ({
-  name,
-  Icon,
-}));
+const ICONS_PER_PAGE = 48; // 6x8 grid
 
-export function ServiceTypeForm({ onClose, onSuccess, templeId }: ServiceTypeFormProps) {
+export function ServiceTypeForm({ onClose, onSuccess, templeId, serviceType }: ServiceTypeFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [iconsLoaded, setIconsLoaded] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [availableIcons, setAvailableIcons] = useState<{ name: string; Icon: any }[]>([]);
   const { toast } = useToast();
   const { currentTemple } = useTempleContext();
 
-  // Use provided templeId if available, otherwise fall back to context
   const effectiveTempleId = templeId || currentTemple?.id;
 
   const form = useForm<ServiceTypeFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: '',
-      icon: '',
+      name: serviceType?.name || '',
+      icon: serviceType?.icon || '',
     },
   });
+
+  // Lazy load icons
+  useEffect(() => {
+    if (!iconsLoaded) {
+      const iconsList = Object.entries(icons).map(([name, Icon]) => ({
+        name,
+        Icon,
+      }));
+      setAvailableIcons(iconsList);
+      setIconsLoaded(true);
+    }
+  }, [iconsLoaded]);
 
   const filteredIcons = availableIcons.filter(icon => 
     icon.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const totalPages = Math.ceil(filteredIcons.length / ICONS_PER_PAGE);
+  const paginatedIcons = filteredIcons.slice(
+    (currentPage - 1) * ICONS_PER_PAGE,
+    currentPage * ICONS_PER_PAGE
+  );
+
+  const nextPage = useCallback(() => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  }, [totalPages]);
+
+  const prevPage = useCallback(() => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  }, []);
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   async function onSubmit(values: ServiceTypeFormValues) {
     if (!effectiveTempleId) {
       toast({
         variant: 'destructive',
-        title: 'Error',
         description: 'No temple selected',
+      });
+      return;
+    }
+
+    if (!values.name || !values.icon) {
+      toast({
+        variant: 'destructive',
+        description: 'Name and icon are required',
       });
       return;
     }
 
     setIsLoading(true);
     try {
-      await createServiceType(effectiveTempleId, {
-        name: values.name,
-        icon: values.icon,
+      console.log('Creating/updating service type:', {
+        templeId: effectiveTempleId,
+        values
       });
-      toast({
-        variant: 'success',
-        title: 'Success',
-        description: 'Service type has been created successfully',
-      });
+
+      if (serviceType) {
+        await updateServiceType(serviceType.id, effectiveTempleId, {
+          name: values.name,
+          icon: values.icon,
+        });
+        toast({
+          description: 'Service type has been updated successfully',
+        });
+      } else {
+        await createServiceType(effectiveTempleId, {
+          name: values.name,
+          icon: values.icon,
+          description: null // Optional field
+        });
+        toast({
+          description: 'Service type has been created successfully',
+        });
+      }
       onSuccess();
     } catch (error) {
+      console.error('Error saving service type:', error);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create service type',
+        description: error instanceof Error ? error.message : 'Failed to save service type',
       });
     } finally {
       setIsLoading(false);
@@ -99,7 +150,7 @@ export function ServiceTypeForm({ onClose, onSuccess, templeId }: ServiceTypeFor
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Add New Service Type</CardTitle>
+        <CardTitle>{serviceType ? 'Edit Service Type' : 'Add New Service Type'}</CardTitle>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
@@ -136,24 +187,52 @@ export function ServiceTypeForm({ onClose, onSuccess, templeId }: ServiceTypeFor
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
-                    <ScrollArea className="h-72 border rounded-md p-4">
-                      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4">
-                        {filteredIcons.map(({ name: iconName, Icon }) => (
+                    <div className="border rounded-md">
+                      <ScrollArea className="h-72 p-4">
+                        <div className="grid grid-cols-6 md:grid-cols-8 gap-4">
+                          {paginatedIcons.map(({ name: iconName, Icon }) => (
+                            <Button
+                              key={iconName}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "h-12 w-12 p-0",
+                                field.value === iconName && "border-primary bg-primary/10"
+                              )}
+                              onClick={() => field.onChange(iconName)}
+                            >
+                              <Icon className="h-6 w-6" />
+                            </Button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      {/* Pagination controls */}
+                      <div className="flex items-center justify-between border-t p-2">
+                        <div className="text-sm text-muted-foreground">
+                          Page {currentPage} of {totalPages}
+                        </div>
+                        <div className="flex gap-2">
                           <Button
-                            key={iconName}
                             type="button"
                             variant="outline"
-                            className={cn(
-                              "h-12 w-12 p-0",
-                              field.value === iconName && "border-primary bg-primary/10"
-                            )}
-                            onClick={() => field.onChange(iconName)}
+                            size="sm"
+                            onClick={prevPage}
+                            disabled={currentPage === 1}
                           >
-                            <Icon className="h-6 w-6" />
+                            <ChevronLeft className="h-4 w-4" />
                           </Button>
-                        ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={nextPage}
+                            disabled={currentPage === totalPages}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                    </ScrollArea>
+                    </div>
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -165,7 +244,7 @@ export function ServiceTypeForm({ onClose, onSuccess, templeId }: ServiceTypeFor
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Creating...' : 'Create Type'}
+                {isLoading ? (serviceType ? 'Updating...' : 'Creating...') : (serviceType ? 'Update' : 'Create')}
               </Button>
             </div>
           </form>

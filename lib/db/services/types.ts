@@ -1,12 +1,17 @@
 import { Timestamp } from 'firebase/firestore';
+import { UserProfile } from '@/lib/db/users';
 
 export const SERVICE_TYPES_COLLECTION = 'service_types';
+export const SERVICES_COLLECTION = 'services';
 export const SERVICE_REGISTRATIONS_COLLECTION = 'service_registrations';
 
-export interface ServiceParticipant {
-  userId: string;
-  displayName?: string;
-  photoURL?: string;
+export interface ServiceType {
+  id: string;
+  name: string;
+  description?: string | null; // Made optional
+  icon: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Service {
@@ -18,7 +23,6 @@ export interface Service {
   maxParticipants: number;
   currentParticipants: number;
   pendingParticipants: number;
-  participants?: ServiceParticipant[];
   date: Timestamp;
   timeSlot: {
     start: string;
@@ -35,34 +39,19 @@ export interface Service {
   createdBy: string;
 }
 
-export interface ServiceType {
-  id: string;
-  templeId: string;
-  name: string;
-  icon: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
 export interface ServiceRegistration {
   id: string;
   userId: string;
   serviceId: string;
   templeId: string;
-  serviceName: string;
-  serviceType: string;
-  serviceDate: Timestamp;
-  serviceTimeSlot: {
-    start: string;
-    end: string;
-  };
   status: 'pending' | 'approved' | 'rejected';
   message?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
-// Helper type for service updates
-export type ServiceUpdate = Partial<Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'currentParticipants' | 'pendingParticipants' | 'date'>> & {
-  date?: Date;
-};
+export interface EnrichedRegistration extends ServiceRegistration {
+  service?: Service;
+  user?: UserProfile;
+  serviceName?: string; // For backwards compatibility
+}

@@ -1,53 +1,122 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { revalidateTag } from 'next/cache';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const templeId = searchParams.get('templeId');
+const EVENTS_PER_PAGE = 9;
 
-  if (!templeId) {
-    return NextResponse.json({ error: 'Temple ID is required' }, { status: 400 });
+async function getEvents(templeId: string, lastEventDate: string | null) {
+  const eventsRef = adminDb.collection('temples').doc(templeId).collection('events');
+  
+  // Only select the fields we need
+  let query = eventsRef
+    .select(
+      'title',
+      'description',
+      'location',
+      'startDate',
+      'endDate',
+      'participants',
+      'capacity'
+    )
+    .orderBy('startDate', 'desc')
+    .limit(EVENTS_PER_PAGE);
+
+  if (lastEventDate) {
+    const date = new Date(lastEventDate);
+    query = query.startAfter(date);
   }
 
+  const snapshot = await query.get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    // Convert timestamps to ISO strings for serialization
+    startDate: doc.data().startDate?.toDate?.().toISOString() || null,
+    endDate: doc.data().endDate?.toDate?.().toISOString() || null,
+    // Only include participant count instead of full array
+    participantCount: doc.data().participants?.length || 0,
+    // Remove unnecessary fields from response
+    participants: undefined
+  }));
+}
+
+export async function GET(request: Request) {
   try {
-    const eventsRef = adminDb.collection(`temples/${templeId}/events`);
-    const snapshot = await eventsRef.orderBy('startDate', 'desc').get();
+    const { searchParams } = new URL(request.url);
+    const templeId = searchParams.get('templeId');
+    const lastEventDate = searchParams.get('lastEventDate');
+    const revalidate = searchParams.get('revalidate') === 'true';
     
-    const events = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    return NextResponse.json({ events });
-  } catch (error: any) {
-    console.error('Error fetching events:', {
-      error: error.message,
-      code: error.code,
-      templeId,
-      path: `temples/${templeId}/events`
-    });
-    
-    // Return more specific error messages to help diagnose deployment issues
-    if (error.code === 'permission-denied') {
+    if (!templeId) {
       return NextResponse.json(
-        { error: 'Permission denied accessing events' },
-        { status: 403 }
-      );
-    }
-    
-    if (error.code === 'not-found') {
-      return NextResponse.json(
-        { error: 'Temple or events collection not found' },
-        { status: 404 }
+        { error: 'Temple ID is required' },
+        { status: 400 }
       );
     }
 
+    // Handle revalidation requests
+    if (revalidate) {
+      revalidateTag(`temple-${templeId}-events`);
+      return NextResponse.json({ revalidated: true, now: Date.now() });
+    }
+
+    const events = await getEvents(templeId, lastEventDate);
+
+    // Return optimized response with cache headers
+    return new NextResponse(
+      JSON.stringify({
+        events,
+        hasMore: events.length === EVENTS_PER_PAGE,
+        lastEventDate: events.length > 0 ? events[events.length - 1].startDate : null
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          // Cache for 1 minute, allow stale-while-revalidate for 30 seconds
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30'
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Error fetching events:', error);
     return NextResponse.json(
+      { error: 'Failed to fetch events' },
       { 
-        error: 'Failed to fetch events',
-        details: error.message,
-        code: error.code 
-      }, 
+        status: 500,
+        headers: {
+          // Don't cache error responses
+          'Cache-Control': 'no-store'
+        }
+      }
+    );
+  }
+}
+
+// Handle POST requests to trigger revalidation
+export async function POST(request: Request) {
+  try {
+    const { templeId } = await request.json();
+    
+    if (!templeId) {
+      return NextResponse.json(
+        { error: 'Temple ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Revalidate the cache for this temple's events
+    revalidateTag(`temple-${templeId}-events`);
+
+    return NextResponse.json({
+      revalidated: true,
+      now: Date.now()
+    });
+  } catch (error) {
+    console.error('Error revalidating:', error);
+    return NextResponse.json(
+      { error: 'Failed to revalidate' },
       { status: 500 }
     );
   }

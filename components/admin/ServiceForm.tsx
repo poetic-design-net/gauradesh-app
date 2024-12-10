@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -68,7 +68,7 @@ export interface ServiceFormProps {
   onSuccess: () => void;
   serviceTypes: ServiceType[];
   templeId?: string | null;
-  service?: Service;
+  service?: Service | null;
 }
 
 export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, service }: ServiceFormProps) {
@@ -103,6 +103,24 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
     },
   });
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Service Types:', serviceTypes);
+    console.log('Current Service:', service);
+    console.log('Current Form Values:', form.getValues());
+  }, [serviceTypes, service, form]);
+
+  // Find the matching service type for the current value
+  const selectedType = serviceTypes.find(type => type.name === form.watch('type'));
+
+  // Debug logging for form values
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      console.log('Form Values:', value);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   async function onSubmit(values: ServiceFormValues) {
     if (!effectiveTempleId || !user) {
       toast({
@@ -131,8 +149,6 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           contactPerson
         });
         toast({
-          variant: 'success',
-          title: 'Success',
           description: 'Service has been updated successfully',
         });
       } else {
@@ -146,8 +162,6 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
           contactPerson
         });
         toast({
-          variant: 'success',
-          title: 'Success',
           description: 'Service has been created successfully',
         });
       }
@@ -173,8 +187,6 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
     try {
       await deleteService(service.id, user.uid, effectiveTempleId, true);
       toast({
-        variant: 'success',
-        title: 'Success',
         description: 'Service has been deleted successfully',
       });
       onSuccess();
@@ -206,7 +218,6 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Basic Info Section */}
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -223,40 +234,48 @@ export function ServiceForm({ onClose, onSuccess, serviceTypes, templeId, servic
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type">
-                            {field.value && (
-                              <div className="flex items-center gap-2">
-                                <ServiceIcon name={field.value} className="h-4 w-4" />
-                                <span>{serviceTypes.find(t => t.name === field.value)?.name || field.value}</span>
-                              </div>
-                            )}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {serviceTypes.map((type) => (
-                          <SelectItem key={type.id} value={type.name}>
-                            <div className="flex items-center gap-2">
-                              <ServiceIcon name={type.icon} className="h-4 w-4" />
-                              <span>{type.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Type</FormLabel>
+                <Select 
+                  onValueChange={field.onChange} 
+                  value={field.value}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select type">
+                        {field.value && (
+                          <div className="flex items-center gap-2">
+                            <ServiceIcon name={selectedType?.icon || field.value} className="h-4 w-4" />
+                            <span>{field.value}</span>
+                          </div>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent position="popper" className="z-[9999]">
+                    {serviceTypes.map((type) => (
+                      <SelectItem 
+                        key={type.id} 
+                        value={type.name}
+                        className="cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ServiceIcon name={type.icon} className="h-4 w-4" />
+                          <span>{type.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
             </div>
 
             <FormField

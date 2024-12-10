@@ -1,152 +1,260 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Event } from '@/lib/db/events/types';
+import { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import type { Event } from '@/lib/db/events/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, MapPin, Users } from 'lucide-react';
 import Link from 'next/link';
-import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useInView } from 'react-intersection-observer';
+import { Timestamp } from 'firebase/firestore';
 
 export interface EventListProps {
   events: Event[];
   templeId: string;
 }
 
-function getDateFromTimestamp(timestamp: Timestamp | { seconds: number; nanoseconds: number } | Date): Date {
-  if (!timestamp) return new Date();
-  if (timestamp instanceof Date) return timestamp;
-  if ('toDate' in timestamp) return timestamp.toDate();
-  if ('seconds' in timestamp) return new Date(timestamp.seconds * 1000);
-  return new Date(timestamp);
-}
+const EVENTS_PER_PAGE = 9;
 
-function isValidEvent(event: any): event is Event {
+// Memoized formatters to prevent recreation on each render
+const dateFormatter = new Intl.DateTimeFormat('de-DE', {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+
+const timeFormatter = new Intl.DateTimeFormat('de-DE', {
+  hour: '2-digit',
+  minute: '2-digit'
+});
+
+// Pure utility functions
+const getDateFromTimestamp = (timestamp: any): Date => {
+  try {
+    if (!timestamp) return new Date();
+    if (timestamp instanceof Date) return timestamp;
+    if (typeof timestamp === 'string') return new Date(timestamp);
+    if (timestamp instanceof Timestamp) return timestamp.toDate();
+    if ('toDate' in timestamp) return timestamp.toDate();
+    if ('seconds' in timestamp) return new Date(timestamp.seconds * 1000);
+    return new Date();
+  } catch (error) {
+    console.error('Error converting timestamp:', error, timestamp);
+    return new Date();
+  }
+};
+
+const formatDate = (date: Date): string => {
+  try {
+    return dateFormatter.format(date);
+  } catch (error) {
+    console.error('Error formatting date:', error, date);
+    return 'Ungültiges Datum';
+  }
+};
+
+const formatTime = (date: Date): string => {
+  try {
+    return timeFormatter.format(date);
+  } catch (error) {
+    console.error('Error formatting time:', error, date);
+    return '--:--';
+  }
+};
+
+const isValidEvent = (event: unknown): event is Event => {
+  try {
+    const e = event as any;
+    return e &&
+      typeof e.id === 'string' &&
+      typeof e.title === 'string' &&
+      typeof e.description === 'string' &&
+      typeof e.location === 'string' &&
+      e.startDate &&
+      e.endDate;
+  } catch (error) {
+    console.error('Error validating event:', error, event);
+    return false;
+  }
+};
+
+// Memoized Event Card Component with optimized rendering
+const EventCard = memo(function EventCard({ 
+  event, 
+  templeId 
+}: { 
+  event: Event; 
+  templeId: string;
+}) {
+  // Memoize computed values
+  const participantCount = useMemo(() => event.participants?.length || 0, [event.participants]);
+  const startDate = useMemo(() => getDateFromTimestamp(event.startDate), [event.startDate]);
+  const endDate = useMemo(() => getDateFromTimestamp(event.endDate), [event.endDate]);
+  
+  const formattedStartDate = useMemo(() => formatDate(startDate), [startDate]);
+  const formattedStartTime = useMemo(() => formatTime(startDate), [startDate]);
+  const formattedEndTime = useMemo(() => formatTime(endDate), [endDate]);
+
   return (
-    event &&
-    typeof event.id === 'string' &&
-    typeof event.title === 'string' &&
-    typeof event.description === 'string' &&
-    typeof event.location === 'string' &&
-    (event.startDate instanceof Timestamp || 'seconds' in event.startDate) &&
-    (event.endDate instanceof Timestamp || 'seconds' in event.endDate)
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <CardTitle className="text-xl">{event.title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex items-center text-sm text-gray-500">
+            <Calendar className="mr-2 h-4 w-4" />
+            {formattedStartDate}
+          </div>
+          <div className="flex items-center text-sm text-gray-500">
+            <Clock className="mr-2 h-4 w-4" />
+            {formattedStartTime} - {formattedEndTime}
+          </div>
+          <div className="flex items-center text-sm text-gray-500">
+            <MapPin className="mr-2 h-4 w-4" />
+            {event.location}
+          </div>
+          <div className="flex items-center text-sm text-gray-500">
+            <Users className="mr-2 h-4 w-4" />
+            <span>
+              {participantCount} Teilnehmer{participantCount !== 1 ? '' : ''}
+              {event.capacity ? ` / ${event.capacity}` : ''}
+            </span>
+          </div>
+          <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+            {event.description}
+          </p>
+          <Link href={`/temples/${templeId}/events/${event.id}`} prefetch={true}>
+            <Button className="w-full mt-4">Details anzeigen</Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memo
+  return (
+    prevProps.event.id === nextProps.event.id &&
+    prevProps.event.title === nextProps.event.title &&
+    prevProps.event.description === nextProps.event.description &&
+    prevProps.event.location === nextProps.event.location &&
+    prevProps.event.startDate === nextProps.event.startDate &&
+    prevProps.event.endDate === nextProps.event.endDate &&
+    prevProps.event.capacity === nextProps.event.capacity &&
+    (prevProps.event.participants?.length || 0) === (nextProps.event.participants?.length || 0)
+  );
+});
 
+// Main EventList component with optimized rendering
 export default function EventList({ events: initialEvents, templeId }: EventListProps) {
+  // Memoize initial event filtering
   const [events, setEvents] = useState<Event[]>(() => 
     Array.isArray(initialEvents) ? initialEvents.filter(isValidEvent) : []
   );
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastEvent, setLastEvent] = useState<Event | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Subscribe to real-time updates
+  const { ref, inView } = useInView({
+    threshold: 0.1,
+    rootMargin: '100px',
+  });
+
+  // Memoized loadMoreEvents function
+  const loadMoreEvents = useCallback(async () => {
+    if (!templeId || isLoading || !hasMore) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const lastEventDate = lastEvent?.startDate;
+      const url = `/api/events?templeId=${templeId}${lastEventDate ? `&lastEventDate=${lastEventDate}` : ''}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch events');
+      }
+
+      const data = await response.json();
+      const newEvents = (data.events || []).filter(isValidEvent);
+
+      if (newEvents.length > 0) {
+        setLastEvent(newEvents[newEvents.length - 1]);
+        setEvents(prev => {
+          // Use Map for efficient duplicate removal
+          const uniqueEvents = new Map();
+          [...prev, ...newEvents].forEach(event => {
+            uniqueEvents.set(event.id, event);
+          });
+          return Array.from(uniqueEvents.values());
+        });
+      }
+
+      setHasMore(data.hasMore);
+    } catch (error) {
+      console.error('Error loading more events:', error);
+      setError('Failed to load events. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [templeId, isLoading, hasMore, lastEvent]);
+
+  // Load more events when scrolling into view
   useEffect(() => {
-    if (!templeId) return;
+    if (inView && hasMore && !isLoading && events.length >= EVENTS_PER_PAGE) {
+      loadMoreEvents();
+    }
+  }, [inView, hasMore, isLoading, events.length, loadMoreEvents]);
 
-    const eventsRef = collection(db, `temples/${templeId}/events`);
-    const q = query(eventsRef, orderBy('startDate', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const updatedEvents = snapshot.docs
-        .map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        } as Event))
-        .filter(isValidEvent);
-      setEvents(updatedEvents);
-      setIsLoading(false);
-    }, (error) => {
-      console.error('Error in real-time events subscription:', error);
-      setIsLoading(false);
-    });
+  // Memoize the event grid to prevent unnecessary re-renders
+  const eventGrid = useMemo(() => (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {events.map((event) => (
+        <EventCard 
+          key={event.id} 
+          event={event} 
+          templeId={templeId}
+        />
+      ))}
+    </div>
+  ), [events, templeId]);
 
-    // Set a timeout to ensure loading state shows for at least a brief moment
-    const loadingTimeout = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-
-    return () => {
-      unsubscribe();
-      clearTimeout(loadingTimeout);
-    };
-  }, [templeId]);
-
-  if (isLoading) {
+  if (!events?.length && !isLoading) {
     return (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <Card key={i} className="hover:shadow-lg transition-shadow animate-pulse">
-            <CardHeader>
-              <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                <div className="h-20 bg-gray-200 rounded w-full"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="text-center py-10">
+        <p className="text-gray-500">Keine Events gefunden</p>
       </div>
     );
   }
 
-  if (!events?.length) {
+  if (error) {
     return (
       <div className="text-center py-10">
-        <p className="text-gray-500">No events found</p>
+        <p className="text-red-500">{error}</p>
+        <Button 
+          onClick={() => loadMoreEvents()} 
+          className="mt-4"
+          variant="outline"
+        >
+          Erneut versuchen
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {events.map((event) => {
-        const participantCount = event.participants?.length || 0;
-        const startDate = getDateFromTimestamp(event.startDate);
-        const endDate = getDateFromTimestamp(event.endDate);
-        
-        return (
-          <Card key={event.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle className="text-xl">{event.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-center text-sm text-gray-500">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {startDate.toLocaleDateString()}
-                </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <Clock className="mr-2 h-4 w-4" />
-                  {startDate.toLocaleTimeString()} - {endDate.toLocaleTimeString()}
-                </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <MapPin className="mr-2 h-4 w-4" />
-                  {event.location}
-                </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <Users className="mr-2 h-4 w-4" />
-                  <span>
-                    {participantCount} participant{participantCount !== 1 ? 's' : ''}
-                    {event.capacity ? ` / ${event.capacity}` : ''}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                  {event.description}
-                </p>
-                <Link href={`/temples/${templeId}/events/${event.id}`} prefetch={true}>
-                  <Button className="w-full mt-4">View Details</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="space-y-6">
+      {eventGrid}
+      {(hasMore || isLoading) && (
+        <div ref={ref} className="w-full h-10 flex items-center justify-center">
+          {isLoading && <p className="text-gray-500">Lade weitere Events...</p>}
+        </div>
+      )}
     </div>
   );
 }

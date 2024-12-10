@@ -43,5 +43,16 @@ service firebase.storage {
         isTempleAdmin(templeId)
       );
     }
+
+    // Event images
+    match /temples/{templeId}/events/{eventId}/image {
+      // Anyone can read event images
+      allow read: if isAuthenticated();
+      // Only temple admins and super admins can upload event images
+      allow write: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isTempleAdmin(templeId)
+      );
+    }
   }
 }

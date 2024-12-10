@@ -6,7 +6,7 @@ interface ServicesLayoutProps {
 
 export default function ServicesLayout({ children }: ServicesLayoutProps) {
   return (
-    <div className="relative flex-1">
+    <div className="relative container mx-auto flex-1">
       {/* Background Image - consistent across all states */}
       <div 
         className="fixed inset-0 bg-cover bg-center bg-fixed bg-no-repeat pointer-events-none"

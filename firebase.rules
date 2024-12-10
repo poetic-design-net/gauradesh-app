@@ -158,21 +158,6 @@ service cloud.firestore {
       );
     }
 
-    match /service_types/{typeId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && 
-        request.resource.data.keys().hasOnly([
-          'id', 'name', 'icon', 'templeId',
-          'createdAt', 'updatedAt'
-        ]) && (
-          isAdmin() || 
-          (request.resource.data.templeId != null && isTempleAdmin(request.resource.data.templeId))
-        );
-      allow update, delete: if isAuthenticated() && 
-        resource.data.templeId != null && 
-        isTempleAdmin(resource.data.templeId);
-    }
-
     match /temples/{templeId} {
       // Allow reading temples without authentication for sign-up
       allow read: if true;
@@ -196,6 +181,14 @@ service cloud.firestore {
       );
       
       allow delete: if isAuthenticated() && isSuperAdmin();
+
+      match /service_types/{typeId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isTempleAdmin(templeId) &&
+          request.resource.data.keys().hasAll(['name', 'icon', 'createdAt', 'updatedAt']);
+        allow update: if isAuthenticated() && isTempleAdmin(templeId);
+        allow delete: if isAuthenticated() && isTempleAdmin(templeId);
+      }
 
       match /events/{eventId} {
         allow read: if isAuthenticated();

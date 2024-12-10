@@ -13,6 +13,8 @@ interface ImageUploadProps {
   path: string;
   className?: string;
   aspectRatio?: "square" | "wide";
+  onUploadStart?: () => void;
+  onUploadEnd?: () => void;
 }
 
 async function convertToWebP(file: File): Promise<Blob> {
@@ -36,7 +38,7 @@ async function convertToWebP(file: File): Promise<Blob> {
         } else {
           reject(new Error('Could not convert to WebP'));
         }
-      }, 'image/webp', 0.8); // 0.8 quality gives good balance between size and quality
+      }, 'image/webp', 0.8);
     };
     img.onerror = () => reject(new Error('Could not load image'));
     img.src = URL.createObjectURL(file);
@@ -48,7 +50,9 @@ export function ImageUpload({
   currentImageUrl, 
   path,
   className = "",
-  aspectRatio = "square"
+  aspectRatio = "square",
+  onUploadStart,
+  onUploadEnd
 }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl || null);
@@ -60,24 +64,22 @@ export function ImageUpload({
 
     try {
       setUploading(true);
+      onUploadStart?.();
 
-      // Create a preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
 
-      // Convert to WebP
       const webpBlob = await convertToWebP(file);
       const webpFile = new File([webpBlob], file.name.replace(/\.[^/.]+$/, '.webp'), {
         type: 'image/webp'
       });
 
-      // Upload to Firebase Storage with metadata
       const metadata = {
         contentType: 'image/webp',
-        cacheControl: 'public, max-age=31536000', // Cache for 1 year
+        cacheControl: 'public, max-age=31536000',
       };
       
       const storageRef = ref(storage, path);
@@ -87,17 +89,30 @@ export function ImageUpload({
       onUpload(downloadUrl);
     } catch (error) {
       console.error('Error uploading image:', error);
+      setPreviewUrl(currentImageUrl || null);
     } finally {
       setUploading(false);
+      onUploadEnd?.();
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
-  const handleClearImage = () => {
+  const handleClearImage = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setPreviewUrl(null);
     onUpload('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleUploadClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInputRef.current?.click();
   };
 
   const aspectRatioClass = aspectRatio === "wide" ? "aspect-video" : "aspect-square";
@@ -122,6 +137,7 @@ export function ImageUpload({
           />
           <button
             onClick={handleClearImage}
+            type="button"
             className="absolute top-2 right-2 p-1 bg-background/80 rounded-full hover:bg-background"
           >
             <X className="h-4 w-4" />
@@ -129,7 +145,8 @@ export function ImageUpload({
         </div>
       ) : (
         <Button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={handleUploadClick}
+          type="button"
           variant="outline"
           className={`w-full ${aspectRatioClass} flex flex-col items-center justify-center border-dashed`}
           disabled={uploading}

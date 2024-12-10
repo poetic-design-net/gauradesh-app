@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { AdminDashboardSkeleton } from '@/components/admin/AdminDashboardSkeleton';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { EventsTable } from '@/components/admin/EventsTable';
 import { ServicesTable } from '@/components/admin/ServicesTable';
+import { ServiceTypesTable } from '@/components/admin/ServiceTypesTable';
 import { RegistrationsTable } from '@/components/admin/RegistrationsTable';
 import { ServiceForm } from '@/components/admin/ServiceForm';
 import { ServiceTypeForm } from '@/components/admin/ServiceTypeForm';
@@ -22,14 +23,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 
 import { 
   getAllServices, 
   getTempleServiceRegistrations,
-  getAllServiceTypes,
   getTempleServices,
-  getTempleServiceTypes,
   updateServiceRegistrationStatus,
   deleteRegistration,
   deleteService,
@@ -37,6 +42,7 @@ import {
   ServiceRegistration,
   ServiceType
 } from '@/lib/db/services';
+import { getTempleServiceTypes, createServiceType, deleteServiceType } from '@/lib/db/services/service-types';
 import { getTempleEvents, deleteEvent } from '@/lib/db/events/events';
 import { Event } from '@/lib/db/events/types';
 import { getUserProfile, type UserProfile } from '@/lib/db/users';
@@ -89,9 +95,12 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [showTypeForm, setShowTypeForm] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingServiceType, setEditingServiceType] = useState<ServiceType | undefined>();
   const [adminData, setAdminData] = useState<AdminData | null>(null);
   const { toast } = useToast();
   const [deletingService, setDeletingService] = useState<Service | null>(null);
+  const [deletingServiceType, setDeletingServiceType] = useState<ServiceType | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -102,6 +111,7 @@ export default function AdminDashboard() {
       const servicesData = adminData.templeId 
         ? await getTempleServices(adminData.templeId)
         : await getAllServices();
+      console.log('Loaded services:', servicesData);
       setServices(servicesData);
     } catch (error) {
       console.error('Error loading services:', error);
@@ -134,11 +144,37 @@ export default function AdminDashboard() {
 
   const loadServiceTypes = async (adminData: AdminData) => {
     try {
+      console.log('Loading service types for temple:', adminData.templeId);
+      if (!adminData.templeId) {
+        console.error('No temple ID available');
+        return;
+      }
+      
       setLoadingServiceTypes(true);
-      const typesData = adminData.templeId
-        ? await getTempleServiceTypes(adminData.templeId)
-        : await getAllServiceTypes();
-      setServiceTypes(typesData);
+      const typesData = await getTempleServiceTypes(adminData.templeId);
+      console.log('Loaded service types:', typesData);
+      
+      // If we have a service with type "Kirtan" but no service types, create it
+      if (typesData.length === 0 && services.some(s => s.type === "Kirtan")) {
+        console.log('Creating missing Kirtan service type');
+        try {
+          const kirtanType = await createServiceType(adminData.templeId, {
+            name: "Kirtan",
+            icon: "music", // Using a default icon
+            description: "Devotional chanting and singing"
+          });
+          console.log('Successfully created Kirtan service type:', kirtanType);
+          setServiceTypes([kirtanType]);
+        } catch (error) {
+          console.error('Error creating Kirtan service type:', error);
+          toast({
+            variant: 'destructive',
+            description: 'Failed to create Kirtan service type'
+          });
+        }
+      } else {
+        setServiceTypes(typesData);
+      }
     } catch (error) {
       console.error('Error loading service types:', error);
       toast({
@@ -188,11 +224,13 @@ export default function AdminDashboard() {
 
       setAdminData(adminResult);
 
-      // Load all data in parallel
+      // Load services first, then service types
+      await loadServices(adminResult);
+      await loadServiceTypes(adminResult);
+      
+      // Load other data
       await Promise.all([
-        loadServices(adminResult),
         loadEvents(adminResult),
-        loadServiceTypes(adminResult),
         adminResult.templeId ? loadRegistrations(adminResult) : Promise.resolve()
       ]);
     } catch (err: any) {
@@ -273,6 +311,27 @@ export default function AdminDashboard() {
     setDeletingService(service);
   };
 
+  const handleDeleteServiceType = async (serviceType: ServiceType) => {
+    if (!adminData?.templeId) {
+      toast({
+        variant: 'destructive',
+        description: 'Missing temple ID'
+      });
+      return;
+    }
+    setDeletingServiceType(serviceType);
+  };
+
+  const handleEditService = (service: Service) => {
+    setEditingService(service);
+    setShowServiceForm(true);
+  };
+
+  const handleEditServiceType = (serviceType: ServiceType) => {
+    setEditingServiceType(serviceType);
+    setShowTypeForm(true);
+  };
+
   const handleDeleteEvent = async (event: Event) => {
     if (!adminData?.templeId) {
       toast({
@@ -282,6 +341,12 @@ export default function AdminDashboard() {
       return;
     }
     setDeletingEvent(event);
+  };
+
+  const handleEditEvent = (event: Event) => {
+    if (adminData?.templeId) {
+      router.push(`/temples/${adminData.templeId}/events/edit/${event.id}`);
+    }
   };
 
   const confirmDeleteService = async () => {
@@ -302,6 +367,27 @@ export default function AdminDashboard() {
     } finally {
       setActionLoading(false);
       setDeletingService(null);
+    }
+  };
+
+  const confirmDeleteServiceType = async () => {
+    if (!deletingServiceType || !adminData?.templeId) return;
+
+    try {
+      setActionLoading(true);
+      await deleteServiceType(deletingServiceType.id, adminData.templeId);
+      toast({ 
+        description: 'Service type deleted successfully' 
+      });
+      await loadServiceTypes(adminData);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        description: error.message || 'Failed to delete service type'
+      });
+    } finally {
+      setActionLoading(false);
+      setDeletingServiceType(null);
     }
   };
 
@@ -345,48 +431,99 @@ export default function AdminDashboard() {
     <div className="p-4 space-y-6 animate-in fade-in-50 duration-500">
       <AdminHeader
         onRefresh={loadData}
-        onAddServiceType={() => setShowTypeForm(true)}
-        onAddService={() => setShowServiceForm(true)}
+        onAddServiceType={() => {
+          setEditingServiceType(undefined);
+          setShowTypeForm(true);
+        }}
+        onAddService={() => {
+          setEditingService(null);
+          setShowServiceForm(true);
+        }}
         templeId={adminData?.templeId}
         isLoading={actionLoading}
       />
 
-      {showServiceForm && (
-        <ServiceForm 
-          onClose={() => setShowServiceForm(false)}
-          onSuccess={async () => {
+      <Dialog 
+        open={showServiceForm} 
+        onOpenChange={(open) => {
+          if (!open) {
             setShowServiceForm(false);
-            if (adminData) await loadServices(adminData);
-          }}
-          serviceTypes={serviceTypes}
-          templeId={adminData?.templeId}
-        />
-      )}
+            setEditingService(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editingService ? 'Edit Service' : 'Create Service'}</DialogTitle>
+          </DialogHeader>
+          <ServiceForm 
+            onClose={() => {
+              setShowServiceForm(false);
+              setEditingService(null);
+            }}
+            onSuccess={async () => {
+              setShowServiceForm(false);
+              setEditingService(null);
+              if (adminData) await loadServices(adminData);
+            }}
+            serviceTypes={serviceTypes}
+            templeId={adminData?.templeId}
+            service={editingService}
+          />
+        </DialogContent>
+      </Dialog>
 
-      {showTypeForm && (
-        <ServiceTypeForm
-          onClose={() => setShowTypeForm(false)}
-          onSuccess={async () => {
+      <Dialog 
+        open={showTypeForm} 
+        onOpenChange={(open) => {
+          if (!open) {
             setShowTypeForm(false);
-            if (adminData) await loadServiceTypes(adminData);
-          }}
-          templeId={adminData?.templeId}
-        />
-      )}
+            setEditingServiceType(undefined);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingServiceType ? 'Edit Service Type' : 'Create Service Type'}</DialogTitle>
+          </DialogHeader>
+          <ServiceTypeForm
+            onClose={() => {
+              setShowTypeForm(false);
+              setEditingServiceType(undefined);
+            }}
+            onSuccess={async () => {
+              setShowTypeForm(false);
+              setEditingServiceType(undefined);
+              if (adminData) await loadServiceTypes(adminData);
+            }}
+            templeId={adminData?.templeId}
+            serviceType={editingServiceType}
+          />
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <AdminDashboardSkeleton />
       ) : (
         <>
+          <ServiceTypesTable
+            serviceTypes={serviceTypes}
+            onDeleteServiceType={handleDeleteServiceType}
+            onEditServiceType={handleEditServiceType}
+            isLoading={actionLoading}
+          />
+
           <EventsTable
             events={events}
             onDeleteEvent={handleDeleteEvent}
+            onEditEvent={handleEditEvent}
             isLoading={actionLoading}
           />
 
           <ServicesTable
             services={services}
             onDeleteService={handleDeleteService}
+            onEditService={handleEditService}
             isLoading={actionLoading}
           />
 
@@ -413,6 +550,28 @@ export default function AdminDashboard() {
             <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDeleteService} 
+              className="bg-red-600 hover:bg-red-700"
+              disabled={actionLoading}
+            >
+              {actionLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deletingServiceType !== null} onOpenChange={() => setDeletingServiceType(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Service Type</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this service type? This may affect existing services using this type.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteServiceType} 
               className="bg-red-600 hover:bg-red-700"
               disabled={actionLoading}
             >
